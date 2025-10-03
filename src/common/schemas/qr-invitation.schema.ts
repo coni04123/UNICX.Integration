@@ -80,9 +80,6 @@ export class QRInvitation {
   userId: Types.ObjectId;
 
   @Prop({ required: true })
-  tenantId: string;
-
-  @Prop({ required: true })
   email: string;
 
   @Prop({ required: true })
@@ -115,8 +112,8 @@ export const QRInvitationSchema = SchemaFactory.createForClass(QRInvitation);
 // Indexes for performance
 QRInvitationSchema.index({ qrCodeId: 1 }, { unique: true });
 QRInvitationSchema.index({ userId: 1 });
-QRInvitationSchema.index({ tenantId: 1, isActive: 1 });
-QRInvitationSchema.index({ status: 1, tenantId: 1 });
+QRInvitationSchema.index({ isActive: 1 });
+QRInvitationSchema.index({ status: 1 });
 QRInvitationSchema.index({ expiresAt: 1 });
 QRInvitationSchema.index({ email: 1 });
 QRInvitationSchema.index({ createdAt: 1 });

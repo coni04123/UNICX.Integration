@@ -11,7 +11,6 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: UserRole;
-  tenantId: string;
   entityId: string;
 }
 
@@ -24,7 +23,6 @@ export interface LoginResponse {
     firstName: string;
     lastName: string;
     role: UserRole;
-    tenantId: string;
     entityId: string;
     entityPath: string;
   };
@@ -59,7 +57,6 @@ export class AuthService {
       sub: user._id.toString(),
       email: user.email,
       role: user.role,
-      tenantId: user.tenantId,
       entityId: user.entityId.toString(),
     };
 
@@ -78,7 +75,6 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        tenantId: user.tenantId,
         entityId: user.entityId.toString(),
         entityPath: user.entityPath,
       },
@@ -100,7 +96,6 @@ export class AuthService {
         sub: user._id.toString(),
         email: user.email,
         role: user.role,
-        tenantId: user.tenantId,
         entityId: user.entityId.toString(),
       };
 
@@ -153,7 +148,6 @@ export class AuthService {
       }
 
       entityId = defaultEntity._id.toString();
-      tenantId = defaultEntity.tenantId;
       entityPath = defaultEntity.path;
     } else {
       // Get entity path
@@ -175,7 +169,6 @@ export class AuthService {
       lastName: registerDto.lastName,
       password: hashedPassword,
       entityId: new Types.ObjectId(entityId),
-      tenantId,
       entityPath,
       role: UserRole.USER,
       registrationStatus: 'registered',

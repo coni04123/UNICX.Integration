@@ -26,9 +26,6 @@ export class Entity {
   @Prop({ required: true })
   path: string;
 
-  @Prop({ required: true })
-  tenantId: string;
-
   @Prop({ required: true, default: 0 })
   level: number;
 
@@ -54,11 +51,11 @@ export class Entity {
 export const EntitySchema = SchemaFactory.createForClass(Entity);
 
 // Indexes for performance
-EntitySchema.index({ tenantId: 1, isActive: 1 });
+EntitySchema.index({ isActive: 1 });
 EntitySchema.index({ parentId: 1 });
 EntitySchema.index({ path: 1 });
-EntitySchema.index({ type: 1, tenantId: 1 });
-EntitySchema.index({ level: 1, tenantId: 1 });
+EntitySchema.index({ type: 1 });
+EntitySchema.index({ level: 1 });
 
 // Virtual for children
 EntitySchema.virtual('children', {

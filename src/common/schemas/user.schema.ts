@@ -94,9 +94,6 @@ export class User {
   @Prop({ required: true })
   entityPath: string;
 
-  @Prop({ required: true })
-  tenantId: string;
-
   @Prop({ enum: WhatsAppConnectionStatus, default: WhatsAppConnectionStatus.DISCONNECTED })
   whatsappConnectionStatus: WhatsAppConnectionStatus;
 
@@ -136,10 +133,10 @@ export const UserSchema = SchemaFactory.createForClass(User);
 // Indexes for performance
 UserSchema.index({ phoneNumber: 1 }, { unique: true });
 UserSchema.index({ email: 1 }, { unique: true });
-UserSchema.index({ tenantId: 1, isActive: 1 });
+UserSchema.index({ isActive: 1 });
 UserSchema.index({ entityId: 1 });
-UserSchema.index({ registrationStatus: 1, tenantId: 1 });
-UserSchema.index({ role: 1, tenantId: 1 });
+UserSchema.index({ registrationStatus: 1 });
+UserSchema.index({ role: 1 });
 UserSchema.index({ whatsappConnectionStatus: 1 });
 
 // Virtual for full name

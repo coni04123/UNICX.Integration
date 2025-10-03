@@ -55,9 +55,6 @@ export class OnboardingProgress {
   @Prop({ type: Types.ObjectId, auto: true })
   _id: Types.ObjectId;
 
-  @Prop({ required: true })
-  tenantId: string;
-
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   adminUserId: Types.ObjectId;
 
@@ -107,9 +104,9 @@ export class OnboardingProgress {
 export const OnboardingProgressSchema = SchemaFactory.createForClass(OnboardingProgress);
 
 // Indexes for performance
-OnboardingProgressSchema.index({ tenantId: 1, isActive: 1 });
+OnboardingProgressSchema.index({ isActive: 1 });
 OnboardingProgressSchema.index({ adminUserId: 1 });
-OnboardingProgressSchema.index({ isCompleted: 1, tenantId: 1 });
+OnboardingProgressSchema.index({ isCompleted: 1 });
 OnboardingProgressSchema.index({ startedAt: 1 });
 OnboardingProgressSchema.index({ completedAt: 1 });
 

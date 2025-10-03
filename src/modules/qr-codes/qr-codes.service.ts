@@ -249,7 +249,6 @@ export class QrCodesService {
       email: invitation.email,
       templateId: invitation.templateId,
       templateData: invitation.templateData,
-      tenantId: invitation.tenantId,
     });
 
     return this.findOne(id, tenantId);
