@@ -17,13 +17,12 @@ import { UpdateOnboardingStepDto } from './dto/create-onboarding-progress.dto';
 import { ResetOnboardingDto } from './dto/create-onboarding-progress.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { TenantGuard } from '../auth/tenant.guard';
 import { Roles, RequireTenant } from '../auth/decorators';
 import { UserRole } from '../../common/schemas/user.schema';
 
 @ApiTags('Onboarding')
 @Controller('onboarding')
-@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class OnboardingController {
   constructor(private readonly onboardingService: OnboardingService) {}

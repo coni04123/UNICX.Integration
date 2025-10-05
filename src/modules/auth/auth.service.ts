@@ -24,9 +24,9 @@ export interface LoginResponse {
     firstName: string;
     lastName: string;
     role: UserRole;
-    tenantId: string;
-    entityId: string;
-    entityPath: string;
+    tenantId?: string;
+    entityId?: string;
+    entityPath?: string;
   };
 }
 
@@ -59,8 +59,8 @@ export class AuthService {
       sub: user._id.toString(),
       email: user.email,
       role: user.role,
-      tenantId: user.tenantId,
-      entityId: user.entityId.toString(),
+      tenantId: user?.tenantId,
+      entityId: user?.entityId?.toString(),
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -78,9 +78,9 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        tenantId: user.tenantId,
-        entityId: user.entityId.toString(),
-        entityPath: user.entityPath,
+        tenantId: user?.tenantId,
+        entityId: user?.entityId?.toString(),
+        entityPath: user?.entityPath,
       },
     };
   }

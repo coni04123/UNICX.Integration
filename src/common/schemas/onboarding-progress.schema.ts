@@ -56,7 +56,16 @@ export class OnboardingProgress {
   _id: Types.ObjectId;
 
   @Prop({ required: true })
-  tenantId: string;
+  tenantId: string; // Root/first ancestor entity ID for tenant isolation
+
+  @Prop({ type: Types.ObjectId, ref: 'Entity' })
+  entityId: Types.ObjectId;
+
+  @Prop({ type: [Types.ObjectId], ref: 'Entity', default: [] })
+  entityIdPath: Types.ObjectId[]; // Array of all ancestor entity IDs from root to current entity
+
+  @Prop({ type: Types.ObjectId, ref: 'Entity' })
+  companyId: Types.ObjectId; // Nearest ancestor entity with type 'company'
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   adminUserId: Types.ObjectId;
@@ -108,6 +117,9 @@ export const OnboardingProgressSchema = SchemaFactory.createForClass(OnboardingP
 
 // Indexes for performance
 OnboardingProgressSchema.index({ tenantId: 1, isActive: 1 });
+OnboardingProgressSchema.index({ entityId: 1 });
+OnboardingProgressSchema.index({ companyId: 1 });
+OnboardingProgressSchema.index({ entityIdPath: 1 });
 OnboardingProgressSchema.index({ adminUserId: 1 });
 OnboardingProgressSchema.index({ isCompleted: 1, tenantId: 1 });
 OnboardingProgressSchema.index({ startedAt: 1 });

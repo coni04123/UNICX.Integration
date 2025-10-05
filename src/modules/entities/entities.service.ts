@@ -76,6 +76,10 @@ export class EntitiesService {
       query.name = { $regex: filters.search, $options: 'i' };
     }
 
+    if (filters?.ancestorId) {
+      query.entityIdPath = new Types.ObjectId(filters.ancestorId); 
+    }
+
     return this.entityModel.find(query).sort({ path: 1 });
   }
 

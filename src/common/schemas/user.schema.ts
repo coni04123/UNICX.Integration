@@ -94,8 +94,14 @@ export class User {
   @Prop({ required: true })
   entityPath: string;
 
+  @Prop({ type: [Types.ObjectId], ref: 'Entity', default: [] })
+  entityIdPath: Types.ObjectId[]; // Array of all ancestor entity IDs from root to current entity
+
   @Prop({ required: true })
-  tenantId: string;
+  tenantId: string; // Root/first ancestor entity ID for tenant isolation
+
+  @Prop({ type: Types.ObjectId, ref: 'Entity' })
+  companyId: Types.ObjectId; // Nearest ancestor entity with type 'company'
 
   @Prop({ enum: WhatsAppConnectionStatus, default: WhatsAppConnectionStatus.DISCONNECTED })
   whatsappConnectionStatus: WhatsAppConnectionStatus;
@@ -138,6 +144,8 @@ UserSchema.index({ phoneNumber: 1 }, { unique: true });
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ tenantId: 1, isActive: 1 });
 UserSchema.index({ entityId: 1 });
+UserSchema.index({ companyId: 1 });
+UserSchema.index({ entityIdPath: 1 });
 UserSchema.index({ registrationStatus: 1, tenantId: 1 });
 UserSchema.index({ role: 1, tenantId: 1 });
 UserSchema.index({ whatsappConnectionStatus: 1 });

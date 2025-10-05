@@ -20,13 +20,15 @@ const { NestFactory } = require('@nestjs/core');
 const { getModelToken } = require('@nestjs/mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { Types } = require('mongoose');
 
 // Import the compiled AppModule
 const { AppModule } = require('../dist/app.module');
 
 // Configuration
-const TENANT_ID = 'seed-tenant-001';
 const CLEAN_DATABASE = process.argv.includes('--clean') || process.argv.includes('-c');
+
+const rootEntityId = new Types.ObjectId();
 
 class DatabaseSeeder {
   constructor(entityModel, userModel, qrInvitationModel, onboardingProgressModel) {
@@ -55,19 +57,23 @@ class DatabaseSeeder {
     const entities = await this.seedEntities();
     stats.entities = entities.length;
 
+    // Get root entity for tenantId
+    const rootEntity = entities.find(e => e.name === 'UNICX Corporation');
+    const tenantId = rootEntity._id.toString();
+
     // Seed users
     console.log('👥 Seeding users...');
-    const users = await this.seedUsers();
+    const users = await this.seedUsers(tenantId);
     stats.users = users.length;
 
     // Seed QR invitations
     console.log('📱 Seeding QR invitations...');
-    const qrInvitations = await this.seedQRInvitations(entities, users);
+    const qrInvitations = await this.seedQRInvitations(entities, users, tenantId);
     stats.qrInvitations = qrInvitations.length;
 
     // Seed onboarding progress
     console.log('📋 Seeding onboarding progress...');
-    const onboardingProgress = await this.seedOnboardingProgress(entities, users);
+    const onboardingProgress = await this.seedOnboardingProgress(entities, users, tenantId);
     stats.onboardingProgress = onboardingProgress.length;
 
     // Update entity hierarchy
@@ -92,17 +98,24 @@ class DatabaseSeeder {
 
   async seedEntities() {
     const now = new Date();
+    const mongoose = require('mongoose');
+    
+    // Create root entity first to get its ObjectId for tenantId
+    
     
     const entitiesData = [
       // Root company
       {
+        _id: rootEntityId,
         name: 'UNICX Corporation',
         type: 'company',
         parentId: null,
         path: 'UNICX Corporation',
+        entityIdPath: [], // Root has no ancestors
+        companyId: null, // Will be set to self after creation
         level: 0,
         isActive: true,
-        tenantId: TENANT_ID,
+        tenantId: rootEntityId.toString(), // Root entity's ID as string
         createdBy: 'system',
         createdAt: now,
         updatedAt: now,
@@ -111,11 +124,13 @@ class DatabaseSeeder {
       {
         name: 'Engineering',
         type: 'department',
-        parentId: null, // Will be updated later
+        parentId: rootEntityId, // Will be updated later
         path: 'UNICX Corporation/Engineering',
+        entityIdPath: [], // Will be calculated after hierarchy update
+        companyId: rootEntityId, // Will be calculated after hierarchy update
         level: 1,
         isActive: true,
-        tenantId: TENANT_ID,
+        tenantId: rootEntityId.toString(), // Root entity's ID
         createdBy: 'system',
         createdAt: now,
         updatedAt: now,
@@ -123,11 +138,13 @@ class DatabaseSeeder {
       {
         name: 'Sales',
         type: 'department',
-        parentId: null,
+        parentId: rootEntityId,
         path: 'UNICX Corporation/Sales',
+        entityIdPath: [], // Will be calculated after hierarchy update
+        companyId: rootEntityId, // Will be calculated after hierarchy update
         level: 1,
         isActive: true,
-        tenantId: TENANT_ID,
+        tenantId: rootEntityId.toString(), // Root entity's ID
         createdBy: 'system',
         createdAt: now,
         updatedAt: now,
@@ -135,11 +152,13 @@ class DatabaseSeeder {
       {
         name: 'Marketing',
         type: 'department',
-        parentId: null,
+        parentId: rootEntityId,
         path: 'UNICX Corporation/Marketing',
+        entityIdPath: [], // Will be calculated after hierarchy update
+        companyId: rootEntityId, // Will be calculated after hierarchy update
         level: 1,
         isActive: true,
-        tenantId: TENANT_ID,
+        tenantId: rootEntityId.toString(), // Root entity's ID
         createdBy: 'system',
         createdAt: now,
         updatedAt: now,
@@ -147,48 +166,28 @@ class DatabaseSeeder {
       {
         name: 'Human Resources',
         type: 'department',
-        parentId: null,
+        parentId: rootEntityId,
         path: 'UNICX Corporation/Human Resources',
+        entityIdPath: [], // Will be calculated after hierarchy update
+        companyId: rootEntityId, // Will be calculated after hierarchy update
         level: 1,
         isActive: true,
-        tenantId: TENANT_ID,
-        createdBy: 'system',
-        createdAt: now,
-        updatedAt: now,
-      },
-      // Sub-departments
-      {
-        name: 'Frontend Team',
-        type: 'department',
-        parentId: null,
-        path: 'UNICX Corporation/Engineering/Frontend Team',
-        level: 2,
-        isActive: true,
-        tenantId: TENANT_ID,
+        tenantId: rootEntityId.toString(), // Root entity's ID
         createdBy: 'system',
         createdAt: now,
         updatedAt: now,
       },
       {
-        name: 'Backend Team',
-        type: 'department',
+        _id: new Types.ObjectId("6547a1b2c3d4e5f6a7b8c9d0"),
+        name: '2N5 LLC',
+        type: 'company',
         parentId: null,
-        path: 'UNICX Corporation/Engineering/Backend Team',
-        level: 2,
+        path: '2N5 LLC',
+        entityIdPath: [], // Root has no ancestors
+        companyId: null, // Will be set to self after creation
+        level: 0,
         isActive: true,
-        tenantId: TENANT_ID,
-        createdBy: 'system',
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        name: 'DevOps Team',
-        type: 'department',
-        parentId: null,
-        path: 'UNICX Corporation/Engineering/DevOps Team',
-        level: 2,
-        isActive: true,
-        tenantId: TENANT_ID,
+        tenantId: rootEntityId.toString(), // Root entity's ID as string
         createdBy: 'system',
         createdAt: now,
         updatedAt: now,
@@ -200,7 +199,7 @@ class DatabaseSeeder {
     return entities;
   }
 
-  async seedUsers() {
+  async seedUsers(tenantId) {
     const now = new Date();
     
     const usersData = [
@@ -214,9 +213,11 @@ class DatabaseSeeder {
         role: 'SystemAdmin',
         registrationStatus: 'registered',
         whatsappConnectionStatus: 'connected',
-        entityId: null, // Will be set after entities are created
+        entityId: rootEntityId, // Will be set after entities are created
         entityPath: 'UNICX Corporation',
-        tenantId: TENANT_ID,
+        entityIdPath: [], // Will be calculated after hierarchy update
+        companyId: rootEntityId, // Will be calculated after hierarchy update
+        tenantId: tenantId, // Root entity's ID
         isActive: true,
         createdAt: now,
         updatedAt: now,
@@ -231,149 +232,15 @@ class DatabaseSeeder {
         role: 'TenantAdmin',
         registrationStatus: 'registered',
         whatsappConnectionStatus: 'connected',
-        entityId: null,
+        entityId: rootEntityId,
         entityPath: 'UNICX Corporation',
-        tenantId: TENANT_ID,
+        entityIdPath: [], // Will be calculated after hierarchy update
+        companyId: rootEntityId, // Will be calculated after hierarchy update
+        tenantId: tenantId, // Root entity's ID
         isActive: true,
         createdAt: now,
         updatedAt: now,
-      },
-      // Engineering Manager
-      {
-        phoneNumber: '+1234567892',
-        email: 'engineering.manager@unicx.com',
-        firstName: 'Engineering',
-        lastName: 'Manager',
-        password: bcrypt.hashSync('eng123', 12),
-        role: 'User',
-        registrationStatus: 'registered',
-        whatsappConnectionStatus: 'connected',
-        entityId: null,
-        entityPath: 'UNICX Corporation/Engineering',
-        tenantId: TENANT_ID,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      // Frontend Developer
-      {
-        phoneNumber: '+1234567893',
-        email: 'frontend.dev@unicx.com',
-        firstName: 'Frontend',
-        lastName: 'Developer',
-        password: bcrypt.hashSync('frontend123', 12),
-        role: 'User',
-        registrationStatus: 'registered',
-        whatsappConnectionStatus: 'connected',
-        entityId: null,
-        entityPath: 'UNICX Corporation/Engineering/Frontend Team',
-        tenantId: TENANT_ID,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      // Backend Developer
-      {
-        phoneNumber: '+1234567894',
-        email: 'backend.dev@unicx.com',
-        firstName: 'Backend',
-        lastName: 'Developer',
-        password: bcrypt.hashSync('backend123', 12),
-        role: 'User',
-        registrationStatus: 'registered',
-        whatsappConnectionStatus: 'connected',
-        entityId: null,
-        entityPath: 'UNICX Corporation/Engineering/Backend Team',
-        tenantId: TENANT_ID,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      // Sales Manager
-      {
-        phoneNumber: '+1234567895',
-        email: 'sales.manager@unicx.com',
-        firstName: 'Sales',
-        lastName: 'Manager',
-        password: bcrypt.hashSync('sales123', 12),
-        role: 'User',
-        registrationStatus: 'registered',
-        whatsappConnectionStatus: 'connected',
-        entityId: null,
-        entityPath: 'UNICX Corporation/Sales',
-        tenantId: TENANT_ID,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      // Marketing Specialist
-      {
-        phoneNumber: '+1234567896',
-        email: 'marketing.specialist@unicx.com',
-        firstName: 'Marketing',
-        lastName: 'Specialist',
-        password: bcrypt.hashSync('marketing123', 12),
-        role: 'User',
-        registrationStatus: 'registered',
-        whatsappConnectionStatus: 'connected',
-        entityId: null,
-        entityPath: 'UNICX Corporation/Marketing',
-        tenantId: TENANT_ID,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      // HR Manager
-      {
-        phoneNumber: '+1234567897',
-        email: 'hr.manager@unicx.com',
-        firstName: 'HR',
-        lastName: 'Manager',
-        password: bcrypt.hashSync('hr123', 12),
-        role: 'User',
-        registrationStatus: 'registered',
-        whatsappConnectionStatus: 'connected',
-        entityId: null,
-        entityPath: 'UNICX Corporation/Human Resources',
-        tenantId: TENANT_ID,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      // Pending user
-      {
-        phoneNumber: '+1234567898',
-        email: 'pending.user@unicx.com',
-        firstName: 'Pending',
-        lastName: 'User',
-        password: bcrypt.hashSync('pending123', 12),
-        role: 'User',
-        registrationStatus: 'pending',
-        whatsappConnectionStatus: 'disconnected',
-        entityId: null,
-        entityPath: 'UNICX Corporation',
-        tenantId: TENANT_ID,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      // Invited user
-      {
-        phoneNumber: '+1234567899',
-        email: 'invited.user@unicx.com',
-        firstName: 'Invited',
-        lastName: 'User',
-        password: '', // No password yet
-        role: 'User',
-        registrationStatus: 'invited',
-        whatsappConnectionStatus: 'disconnected',
-        entityId: null,
-        entityPath: 'UNICX Corporation',
-        tenantId: TENANT_ID,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
+      }
     ];
 
     const users = await this.userModel.insertMany(usersData);
@@ -381,249 +248,29 @@ class DatabaseSeeder {
     return users;
   }
 
-  async seedQRInvitations(entities, users) {
+  async seedQRInvitations(entities, users, tenantId) {
     const now = new Date();
     const companyEntity = entities.find(e => e.name === 'UNICX Corporation');
     const engineeringEntity = entities.find(e => e.name === 'Engineering');
     const engineeringManager = users.find(u => u.email === 'engineering.manager@unicx.com');
 
-    const qrInvitationsData = [
-      {
-        qrCodeId: crypto.randomBytes(16).toString('hex'),
-        encryptedPayload: crypto.randomBytes(32).toString('hex'),
-        status: 'sent',
-        userId: engineeringManager?._id,
-        tenantId: TENANT_ID,
-        email: 'engineering.manager@unicx.com',
-        expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000), // 24 hours
-        emailDelivery: {
-          sentAt: now,
-          attemptCount: 1,
-          isDelivered: true,
-        },
-        scanEvents: [],
-        templateId: 'welcome',
-        templateData: {
-          entityName: 'UNICX Corporation',
-          welcomeMessage: 'Welcome to UNICX Corporation!',
-        },
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        qrCodeId: crypto.randomBytes(16).toString('hex'),
-        encryptedPayload: crypto.randomBytes(32).toString('hex'),
-        status: 'scanned',
-        userId: engineeringManager?._id,
-        tenantId: TENANT_ID,
-        email: 'engineering.manager@unicx.com',
-        expiresAt: new Date(now.getTime() + 48 * 60 * 60 * 1000), // 48 hours
-        emailDelivery: {
-          sentAt: new Date(now.getTime() - 2 * 60 * 60 * 1000), // 2 hours ago
-          attemptCount: 1,
-          deliveredAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
-          isDelivered: true,
-        },
-        scanEvents: [
-          {
-            scannedAt: new Date(now.getTime() - 1 * 60 * 60 * 1000), // 1 hour ago
-            ipAddress: '192.168.1.100',
-            userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)',
-            deviceInfo: 'iPhone 13',
-            location: 'New York, NY',
-          },
-        ],
-        templateId: 'team-welcome',
-        templateData: {
-          userName: 'Engineering Manager',
-          department: 'Engineering',
-          welcomeMessage: 'Welcome to the Engineering team!',
-        },
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        qrCodeId: crypto.randomBytes(16).toString('hex'),
-        encryptedPayload: crypto.randomBytes(32).toString('hex'),
-        status: 'expired',
-        userId: null,
-        tenantId: TENANT_ID,
-        email: 'event@unicx.com',
-        expiresAt: new Date(now.getTime() - 24 * 60 * 60 * 1000), // Expired 24 hours ago
-        emailDelivery: {
-          sentAt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
-          attemptCount: 1,
-          deliveredAt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
-          isDelivered: true,
-        },
-        scanEvents: Array.from({ length: 150 }, (_, i) => ({
-          scannedAt: new Date(now.getTime() - (7 * 24 - i) * 60 * 60 * 1000),
-          ipAddress: `192.168.1.${(i % 254) + 1}`,
-          userAgent: 'Mozilla/5.0 (compatible; QR Scanner)',
-          deviceInfo: 'Mobile Device',
-          location: 'Various Locations',
-        })),
-        templateId: 'event-invitation',
-        templateData: {
-          eventName: 'Company All-Hands Meeting',
-          date: '2025-01-15',
-          location: 'Main Conference Room',
-          description: 'Monthly all-hands meeting for all employees',
-        },
-        isActive: false,
-        createdAt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), // Created 7 days ago
-        updatedAt: now,
-      },
-    ];
+    const qrInvitationsData = [];
 
     const qrInvitations = await this.qrInvitationModel.insertMany(qrInvitationsData);
     console.log(`✅ Created ${qrInvitations.length} QR invitations`);
     return qrInvitations;
   }
 
-  async seedOnboardingProgress(entities, users) {
+  async seedOnboardingProgress(entities, users, tenantId) {
     const now = new Date();
+    const companyEntity = entities.find(e => e.name === 'UNICX Corporation');
     const engineeringEntity = entities.find(e => e.name === 'Engineering');
+    const frontendTeamEntity = entities.find(e => e.name === 'Frontend Team');
+    const backendTeamEntity = entities.find(e => e.name === 'Backend Team');
     const frontendDev = users.find(u => u.email === 'frontend.dev@unicx.com');
     const backendDev = users.find(u => u.email === 'backend.dev@unicx.com');
 
-    const onboardingProgressData = [
-      {
-        tenantId: TENANT_ID,
-        adminUserId: frontendDev?._id,
-        adminUserName: 'Frontend Developer',
-        steps: [
-          {
-            stepId: 'welcome',
-            stepName: 'Welcome to UNICX',
-            stepDescription: 'Complete your welcome onboarding',
-            status: 'completed',
-            stepData: {
-              completedAt: now,
-              notes: 'Welcome completed successfully',
-            },
-            startedAt: new Date(now.getTime() - 2 * 60 * 60 * 1000), // 2 hours ago
-            completedAt: new Date(now.getTime() - 1 * 60 * 60 * 1000), // 1 hour ago
-            estimatedDuration: 30,
-            actualDuration: 15,
-            prerequisites: [],
-            isOptional: false,
-            validationErrors: [],
-          },
-          {
-            stepId: 'profile-setup',
-            stepName: 'Profile Setup',
-            stepDescription: 'Complete your user profile',
-            status: 'in_progress',
-            stepData: {
-              progress: 60,
-              currentStep: 'upload-photo',
-            },
-            startedAt: new Date(now.getTime() - 30 * 60 * 1000), // 30 minutes ago
-            completedAt: undefined,
-            estimatedDuration: 45,
-            actualDuration: undefined,
-            prerequisites: ['welcome'],
-            isOptional: false,
-            validationErrors: [],
-          },
-          {
-            stepId: 'team-introduction',
-            stepName: 'Team Introduction',
-            stepDescription: 'Meet your team members',
-            status: 'not_started',
-            stepData: {},
-            startedAt: undefined,
-            completedAt: undefined,
-            estimatedDuration: 60,
-            actualDuration: undefined,
-            prerequisites: ['profile-setup'],
-            isOptional: true,
-            validationErrors: [],
-          },
-        ],
-        progressPercentage: 50,
-        isCompleted: false,
-        completedAt: undefined,
-        isReset: false,
-        resetAt: undefined,
-        resetBy: undefined,
-        metadata: {},
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-      {
-        tenantId: TENANT_ID,
-        adminUserId: backendDev?._id,
-        adminUserName: 'Backend Developer',
-        steps: [
-          {
-            stepId: 'welcome',
-            stepName: 'Welcome to UNICX',
-            stepDescription: 'Complete your welcome onboarding',
-            status: 'completed',
-            stepData: {
-              completedAt: now,
-              notes: 'Welcome completed',
-            },
-            startedAt: new Date(now.getTime() - 3 * 60 * 60 * 1000), // 3 hours ago
-            completedAt: new Date(now.getTime() - 2 * 60 * 60 * 1000), // 2 hours ago
-            estimatedDuration: 30,
-            actualDuration: 20,
-            prerequisites: [],
-            isOptional: false,
-            validationErrors: [],
-          },
-          {
-            stepId: 'profile-setup',
-            stepName: 'Profile Setup',
-            stepDescription: 'Complete your user profile',
-            status: 'completed',
-            stepData: {
-              progress: 100,
-              completedAt: now,
-            },
-            startedAt: new Date(now.getTime() - 2 * 60 * 60 * 1000), // 2 hours ago
-            completedAt: new Date(now.getTime() - 1 * 60 * 60 * 1000), // 1 hour ago
-            estimatedDuration: 45,
-            actualDuration: 30,
-            prerequisites: ['welcome'],
-            isOptional: false,
-            validationErrors: [],
-          },
-          {
-            stepId: 'team-introduction',
-            stepName: 'Team Introduction',
-            stepDescription: 'Meet your team members',
-            status: 'completed',
-            stepData: {
-              completedAt: now,
-              teamMembers: ['John Doe', 'Jane Smith'],
-            },
-            startedAt: new Date(now.getTime() - 1 * 60 * 60 * 1000), // 1 hour ago
-            completedAt: new Date(now.getTime() - 30 * 60 * 1000), // 30 minutes ago
-            estimatedDuration: 60,
-            actualDuration: 45,
-            prerequisites: ['profile-setup'],
-            isOptional: true,
-            validationErrors: [],
-          },
-        ],
-        progressPercentage: 100,
-        isCompleted: true,
-        completedAt: new Date(now.getTime() - 30 * 60 * 1000), // 30 minutes ago
-        isReset: false,
-        resetAt: undefined,
-        resetBy: undefined,
-        metadata: {},
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      },
-    ];
+    const onboardingProgressData = [];
 
     const onboardingProgress = await this.onboardingProgressModel.insertMany(onboardingProgressData);
     console.log(`✅ Created ${onboardingProgress.length} onboarding progress records`);
@@ -632,6 +279,7 @@ class DatabaseSeeder {
 
   async updateEntityHierarchy(entities) {
     const entityMap = new Map(entities.map(e => [e.name, e._id]));
+    const entityTypeMap = new Map(entities.map(e => [e.name, e.type]));
 
     const updates = [
       { name: 'Engineering', parentName: 'UNICX Corporation' },
@@ -643,6 +291,7 @@ class DatabaseSeeder {
       { name: 'DevOps Team', parentName: 'Engineering' },
     ];
 
+    // First update parentIds
     for (const update of updates) {
       const entityId = entityMap.get(update.name);
       const parentId = entityMap.get(update.parentName);
@@ -652,7 +301,185 @@ class DatabaseSeeder {
       }
     }
 
-    console.log('✅ Entity hierarchy updated');
+    // Now calculate and update entityIdPath and companyId for all entities
+    const rootCompanyId = entityMap.get('UNICX Corporation');
+    
+    // Update root company to reference itself
+    await this.entityModel.findByIdAndUpdate(rootCompanyId, {
+      companyId: rootCompanyId,
+      entityIdPath: [rootCompanyId],
+    });
+
+    // Update departments under root company
+    for (const deptName of ['Engineering', 'Sales', 'Marketing', 'Human Resources']) {
+      const deptId = entityMap.get(deptName);
+      if (deptId) {
+        await this.entityModel.findByIdAndUpdate(deptId, {
+          companyId: rootCompanyId, // Nearest ancestor company
+          entityIdPath: [rootCompanyId, deptId],
+        });
+      }
+    }
+
+    // Update sub-departments under Engineering
+    const engineeringId = entityMap.get('Engineering');
+    for (const teamName of ['Frontend Team', 'Backend Team', 'DevOps Team']) {
+      const teamId = entityMap.get(teamName);
+      if (teamId && engineeringId) {
+        await this.entityModel.findByIdAndUpdate(teamId, {
+          companyId: rootCompanyId, // Nearest ancestor company (UNICX Corporation)
+          entityIdPath: [rootCompanyId, engineeringId, teamId],
+        });
+      }
+    }
+
+    // Update users with entityIdPath and companyId
+    await this.updateUserEntityFields(entityMap);
+
+    // Update QR invitations and onboarding progress
+    await this.updateQRInvitationsEntityFields(entityMap);
+    await this.updateOnboardingProgressEntityFields(entityMap);
+
+    console.log('✅ Entity hierarchy, entityIdPath, and companyId updated');
+  }
+
+  async updateUserEntityFields(entityMap) {
+    const rootCompanyId = entityMap.get('UNICX Corporation');
+    const engineeringId = entityMap.get('Engineering');
+    const salesId = entityMap.get('Sales');
+    const marketingId = entityMap.get('Marketing');
+    const hrId = entityMap.get('Human Resources');
+    const frontendTeamId = entityMap.get('Frontend Team');
+    const backendTeamId = entityMap.get('Backend Team');
+
+    // Update System Admin and Tenant Admin (root level)
+    await this.userModel.updateMany(
+      { email: { $in: ['admin@unicx.com', 'tenant.admin@unicx.com', 'pending.user@unicx.com', 'invited.user@unicx.com'] } },
+      {
+        entityId: rootCompanyId,
+        companyId: rootCompanyId,
+        entityIdPath: [rootCompanyId],
+      }
+    );
+
+    // Update Engineering Manager
+    await this.userModel.updateOne(
+      { email: 'engineering.manager@unicx.com' },
+      {
+        entityId: engineeringId,
+        companyId: rootCompanyId,
+        entityIdPath: [rootCompanyId, engineeringId],
+      }
+    );
+
+    // Update Frontend Developer
+    await this.userModel.updateOne(
+      { email: 'frontend.dev@unicx.com' },
+      {
+        entityId: frontendTeamId,
+        companyId: rootCompanyId,
+        entityIdPath: [rootCompanyId, engineeringId, frontendTeamId],
+      }
+    );
+
+    // Update Backend Developer
+    await this.userModel.updateOne(
+      { email: 'backend.dev@unicx.com' },
+      {
+        entityId: backendTeamId,
+        companyId: rootCompanyId,
+        entityIdPath: [rootCompanyId, engineeringId, backendTeamId],
+      }
+    );
+
+    // Update Sales Manager
+    await this.userModel.updateOne(
+      { email: 'sales.manager@unicx.com' },
+      {
+        entityId: salesId,
+        companyId: rootCompanyId,
+        entityIdPath: [rootCompanyId, salesId],
+      }
+    );
+
+    // Update Marketing Specialist
+    await this.userModel.updateOne(
+      { email: 'marketing.specialist@unicx.com' },
+      {
+        entityId: marketingId,
+        companyId: rootCompanyId,
+        entityIdPath: [rootCompanyId, marketingId],
+      }
+    );
+
+    // Update HR Manager
+    await this.userModel.updateOne(
+      { email: 'hr.manager@unicx.com' },
+      {
+        entityId: hrId,
+        companyId: rootCompanyId,
+        entityIdPath: [rootCompanyId, hrId],
+      }
+    );
+
+    console.log('✅ User entity fields (entityId, companyId, entityIdPath) updated');
+  }
+
+  async updateQRInvitationsEntityFields(entityMap) {
+    const rootCompanyId = entityMap.get('UNICX Corporation');
+    const engineeringId = entityMap.get('Engineering');
+
+    // Update QR invitations with entityIdPath
+    // First invitation: Company level
+    await this.qrInvitationModel.updateOne(
+      { email: 'engineering.manager@unicx.com', status: 'sent' },
+      {
+        entityIdPath: [rootCompanyId],
+      }
+    );
+
+    // Second invitation: Engineering department level
+    await this.qrInvitationModel.updateOne(
+      { email: 'engineering.manager@unicx.com', status: 'scanned' },
+      {
+        entityIdPath: [rootCompanyId, engineeringId],
+      }
+    );
+
+    // Third invitation: Company level (event)
+    await this.qrInvitationModel.updateOne(
+      { email: 'event@unicx.com' },
+      {
+        entityIdPath: [rootCompanyId],
+      }
+    );
+
+    console.log('✅ QR invitation entity fields (entityIdPath) updated');
+  }
+
+  async updateOnboardingProgressEntityFields(entityMap) {
+    const rootCompanyId = entityMap.get('UNICX Corporation');
+    const engineeringId = entityMap.get('Engineering');
+    const frontendTeamId = entityMap.get('Frontend Team');
+    const backendTeamId = entityMap.get('Backend Team');
+
+    // Update Frontend Developer's onboarding progress
+    await this.onboardingProgressModel.updateOne(
+      { adminUserName: 'Frontend Developer' },
+      {
+        entityIdPath: [rootCompanyId, engineeringId, frontendTeamId],
+      }
+    );
+
+    // Update Backend Developer's onboarding progress
+    await this.onboardingProgressModel.updateOne(
+      { adminUserName: 'Backend Developer' },
+      {
+        entityIdPath: [rootCompanyId, engineeringId, backendTeamId],
+      }
+    );
+
+    console.log('✅ Onboarding progress entity fields (entityIdPath) updated');
   }
 }
 

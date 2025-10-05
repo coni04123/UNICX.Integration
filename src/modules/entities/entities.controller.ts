@@ -17,13 +17,12 @@ import { UpdateEntityDto } from './dto/update-entity.dto';
 import { MoveEntityDto } from './dto/move-entity.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { TenantGuard } from '../auth/tenant.guard';
 import { Roles, RequireTenant } from '../auth/decorators';
 import { UserRole } from '../../common/schemas/user.schema';
 
 @ApiTags('Entities')
 @Controller('entities')
-@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class EntitiesController {
   constructor(private readonly entitiesService: EntitiesService) {}

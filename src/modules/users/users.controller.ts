@@ -19,13 +19,12 @@ import { BulkInviteUserDto } from './dto/create-user.dto';
 import { UpdateRegistrationStatusDto } from './dto/create-user.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { TenantGuard } from '../auth/tenant.guard';
 import { Roles, RequireTenant } from '../auth/decorators';
 import { UserRole, RegistrationStatus, WhatsAppConnectionStatus } from '../../common/schemas/user.schema';
 
 @ApiTags('Users')
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

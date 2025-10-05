@@ -79,8 +79,17 @@ export class QRInvitation {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'Entity' })
+  entityId: Types.ObjectId;
+
+  @Prop({ type: [Types.ObjectId], ref: 'Entity', default: [] })
+  entityIdPath: Types.ObjectId[]; // Array of all ancestor entity IDs from root to current entity
+
   @Prop({ required: true })
-  tenantId: string;
+  tenantId: string; // Root/first ancestor entity ID for tenant isolation
+
+  @Prop({ type: Types.ObjectId, ref: 'Entity' })
+  companyId: Types.ObjectId; // Nearest ancestor entity with type 'company'
 
   @Prop({ required: true })
   email: string;
@@ -115,6 +124,9 @@ export const QRInvitationSchema = SchemaFactory.createForClass(QRInvitation);
 // Indexes for performance
 QRInvitationSchema.index({ qrCodeId: 1 }, { unique: true });
 QRInvitationSchema.index({ userId: 1 });
+QRInvitationSchema.index({ entityId: 1 });
+QRInvitationSchema.index({ companyId: 1 });
+QRInvitationSchema.index({ entityIdPath: 1 });
 QRInvitationSchema.index({ tenantId: 1, isActive: 1 });
 QRInvitationSchema.index({ status: 1, tenantId: 1 });
 QRInvitationSchema.index({ expiresAt: 1 });

@@ -26,8 +26,14 @@ export class Entity {
   @Prop({ required: true })
   path: string;
 
+  @Prop({ type: [Types.ObjectId], ref: 'Entity', default: [] })
+  entityIdPath: Types.ObjectId[]; // Array of all ancestor entity IDs from root to current entity
+
   @Prop({ required: true })
-  tenantId: string;
+  tenantId: string; // Root/first ancestor entity ID for tenant isolation
+
+  @Prop({ type: Types.ObjectId, ref: 'Entity' })
+  companyId: Types.ObjectId; // Nearest ancestor entity with type 'company'
 
   @Prop({ required: true, default: 0 })
   level: number;
@@ -57,6 +63,8 @@ export const EntitySchema = SchemaFactory.createForClass(Entity);
 EntitySchema.index({ tenantId: 1, isActive: 1 });
 EntitySchema.index({ parentId: 1 });
 EntitySchema.index({ path: 1 });
+EntitySchema.index({ companyId: 1 });
+EntitySchema.index({ entityIdPath: 1 });
 EntitySchema.index({ type: 1, tenantId: 1 });
 EntitySchema.index({ level: 1, tenantId: 1 });
 

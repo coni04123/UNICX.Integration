@@ -17,14 +17,13 @@ import { BulkCreateQRInvitationDto } from './dto/create-qr-invitation.dto';
 import { ScanQRCodeDto } from './dto/create-qr-invitation.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
-import { TenantGuard } from '../auth/tenant.guard';
 import { Roles, RequireTenant } from '../auth/decorators';
 import { UserRole } from '../../common/schemas/user.schema';
 import { QRInvitationStatus } from '../../common/schemas/qr-invitation.schema';
 
 @ApiTags('QR Codes')
 @Controller('qr-codes')
-@UseGuards(JwtAuthGuard, RolesGuard, TenantGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class QrCodesController {
   constructor(private readonly qrCodesService: QrCodesService) {}
