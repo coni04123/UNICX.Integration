@@ -35,7 +35,12 @@ export class EntitiesController {
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async create(@Body() createEntityDto: CreateEntityDto, @Request() req) {
-    return this.entitiesService.create(createEntityDto, req.user.sub);
+    return this.entitiesService.create(
+      createEntityDto, 
+      req.user.sub, 
+      req.user.role, 
+      req.user.entityId
+    );
   }
 
   @Get()
@@ -79,15 +84,23 @@ export class EntitiesController {
   @Patch(':id')
   @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
   @RequireTenant()
-  @ApiOperation({ summary: 'Update entity' })
+  @ApiOperation({ summary: 'Update entity (name only)' })
   @ApiResponse({ status: 200, description: 'Entity updated successfully' })
   @ApiResponse({ status: 404, description: 'Entity not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden - cannot manage this entity' })
   async update(
     @Param('id') id: string,
     @Body() updateEntityDto: UpdateEntityDto,
     @Request() req,
   ) {
-    return this.entitiesService.update(id, updateEntityDto, req.user.sub, req.user.tenantId);
+    return this.entitiesService.update(
+      id, 
+      updateEntityDto, 
+      req.user.sub, 
+      req.user.tenantId, 
+      req.user.role, 
+      req.user.entityId
+    );
   }
 
   @Patch(':id/move')
@@ -97,12 +110,20 @@ export class EntitiesController {
   @ApiResponse({ status: 200, description: 'Entity moved successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 404, description: 'Entity not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden - cannot manage this entity' })
   async move(
     @Param('id') id: string,
     @Body() moveEntityDto: MoveEntityDto,
     @Request() req,
   ) {
-    return this.entitiesService.move(id, moveEntityDto, req.user.sub, req.user.tenantId);
+    return this.entitiesService.move(
+      id, 
+      moveEntityDto, 
+      req.user.sub, 
+      req.user.tenantId, 
+      req.user.role, 
+      req.user.entityId
+    );
   }
 
   @Delete(':id')
@@ -112,8 +133,15 @@ export class EntitiesController {
   @ApiResponse({ status: 200, description: 'Entity deleted successfully' })
   @ApiResponse({ status: 400, description: 'Bad request - entity has children or users' })
   @ApiResponse({ status: 404, description: 'Entity not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden - cannot manage this entity' })
   async remove(@Param('id') id: string, @Request() req) {
-    await this.entitiesService.remove(id, req.user.sub, req.user.tenantId);
+    await this.entitiesService.remove(
+      id, 
+      req.user.sub, 
+      req.user.tenantId, 
+      req.user.role, 
+      req.user.entityId
+    );
     return { message: 'Entity deleted successfully' };
   }
 }

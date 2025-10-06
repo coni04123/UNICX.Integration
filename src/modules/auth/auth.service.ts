@@ -153,7 +153,7 @@ export class AuthService {
       }
 
       entityId = defaultEntity._id.toString();
-      tenantId = defaultEntity.tenantId;
+      tenantId = defaultEntity.tenantId.toString();
       entityPath = defaultEntity.path;
     } else {
       // Get entity path

@@ -21,10 +21,6 @@ export class CreateEntityDto {
   @IsMongoId()
   parentId?: string;
 
-  @ApiProperty({ example: 'tenant-123' })
-  @IsString()
-  tenantId: string;
-
   @ApiProperty({ example: { description: 'Sales team entity' }, required: false })
   @IsOptional()
   @IsObject()
@@ -37,15 +33,8 @@ export class UpdateEntityDto {
   @IsString()
   name?: string;
 
-  @ApiProperty({ enum: EntityType, example: EntityType.DEPARTMENT, required: false })
-  @IsOptional()
-  @IsEnum(EntityType)
-  type?: EntityType;
-
-  @ApiProperty({ example: { description: 'Updated sales team entity' }, required: false })
-  @IsOptional()
-  @IsObject()
-  metadata?: Record<string, any>;
+  // Note: Type and metadata can only be set during creation
+  // Only name can be updated for existing entities
 }
 
 export class MoveEntityDto {
