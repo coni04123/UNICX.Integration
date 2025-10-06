@@ -64,13 +64,15 @@ export class UsersController {
 
   @Get()
   @RequireTenant()
-  @ApiOperation({ summary: 'Get all users' })
+  @ApiOperation({ summary: 'Get all users with pagination' })
   @ApiQuery({ name: 'registrationStatus', required: false, enum: RegistrationStatus })
   @ApiQuery({ name: 'role', required: false, enum: UserRole })
   @ApiQuery({ name: 'entityId', required: false })
   @ApiQuery({ name: 'whatsappConnectionStatus', required: false, enum: WhatsAppConnectionStatus })
   @ApiQuery({ name: 'search', required: false })
-  @ApiResponse({ status: 200, description: 'Users retrieved successfully' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 10)' })
+  @ApiResponse({ status: 200, description: 'Users retrieved successfully with pagination' })
   async findAll(@Query() query: any, @Request() req) {
     return this.usersService.findAll(req.user.tenantId, query);
   }

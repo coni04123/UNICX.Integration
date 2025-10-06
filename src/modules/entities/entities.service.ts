@@ -69,7 +69,7 @@ export class EntitiesService {
       parentId: new Types.ObjectId(parentId) || null,
       path,
       entityIdPath,
-      tenantId: parentId ? new Types.ObjectId(parent.tenantId) : null,
+      tenantId: parentId ? new Types.ObjectId(parent.tenantId) : newObjectId,
       level,
       metadata: metadata || {},
       createdBy: userId,
@@ -147,13 +147,23 @@ export class EntitiesService {
       updatedBy: userId,
     };
 
-    // Only name can be updated (not type or metadata)
+    // Update name
     if (updateEntityDto.name && updateEntityDto.name !== entity.name) {
       updateData.name = updateEntityDto.name;
       // updateData.path = await this.generatePath(updateEntityDto.name, entity.parentId?.toString());
       
       // Update descendants' paths when name changes
       // await this.updateDescendantsPaths(id, tenantId);
+    }
+
+    // Update type
+    if (updateEntityDto.type && updateEntityDto.type !== entity.type) {
+      updateData.type = updateEntityDto.type;
+    }
+
+    // Update metadata
+    if (updateEntityDto.metadata) {
+      updateData.metadata = updateEntityDto.metadata;
     }
 
     return this.entityModel.findByIdAndUpdate(new Types.ObjectId(id), updateData, { new: true });

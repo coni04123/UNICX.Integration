@@ -112,7 +112,6 @@ class DatabaseSeeder {
         parentId: null,
         path: 'UNICX Corporation',
         entityIdPath: [], // Root has no ancestors
-        companyId: null, // Will be set to self after creation
         level: 0,
         isActive: true,
         tenantId: rootEntityId.toString(), // Root entity's ID as string
@@ -127,7 +126,6 @@ class DatabaseSeeder {
         parentId: rootEntityId, // Will be updated later
         path: 'UNICX Corporation/Engineering',
         entityIdPath: [], // Will be calculated after hierarchy update
-        companyId: rootEntityId, // Will be calculated after hierarchy update
         level: 1,
         isActive: true,
         tenantId: rootEntityId.toString(), // Root entity's ID
@@ -141,7 +139,6 @@ class DatabaseSeeder {
         parentId: rootEntityId,
         path: 'UNICX Corporation/Sales',
         entityIdPath: [], // Will be calculated after hierarchy update
-        companyId: rootEntityId, // Will be calculated after hierarchy update
         level: 1,
         isActive: true,
         tenantId: rootEntityId.toString(), // Root entity's ID
@@ -155,7 +152,6 @@ class DatabaseSeeder {
         parentId: rootEntityId,
         path: 'UNICX Corporation/Marketing',
         entityIdPath: [], // Will be calculated after hierarchy update
-        companyId: rootEntityId, // Will be calculated after hierarchy update
         level: 1,
         isActive: true,
         tenantId: rootEntityId.toString(), // Root entity's ID
@@ -169,7 +165,6 @@ class DatabaseSeeder {
         parentId: rootEntityId,
         path: 'UNICX Corporation/Human Resources',
         entityIdPath: [], // Will be calculated after hierarchy update
-        companyId: rootEntityId, // Will be calculated after hierarchy update
         level: 1,
         isActive: true,
         tenantId: rootEntityId.toString(), // Root entity's ID
@@ -184,7 +179,6 @@ class DatabaseSeeder {
         parentId: null,
         path: '2N5 LLC',
         entityIdPath: [], // Root has no ancestors
-        companyId: null, // Will be set to self after creation
         level: 0,
         isActive: true,
         tenantId: rootEntityId.toString(), // Root entity's ID as string
@@ -216,7 +210,6 @@ class DatabaseSeeder {
         entityId: rootEntityId, // Will be set after entities are created
         entityPath: 'UNICX Corporation',
         entityIdPath: [], // Will be calculated after hierarchy update
-        companyId: rootEntityId, // Will be calculated after hierarchy update
         tenantId: tenantId, // Root entity's ID
         isActive: true,
         createdAt: now,
@@ -235,7 +228,6 @@ class DatabaseSeeder {
         entityId: rootEntityId,
         entityPath: 'UNICX Corporation',
         entityIdPath: [], // Will be calculated after hierarchy update
-        companyId: rootEntityId, // Will be calculated after hierarchy update
         tenantId: tenantId, // Root entity's ID
         isActive: true,
         createdAt: now,
@@ -301,12 +293,11 @@ class DatabaseSeeder {
       }
     }
 
-    // Now calculate and update entityIdPath and companyId for all entities
+    // Now calculate and update entityIdPath for all entities
     const rootCompanyId = entityMap.get('UNICX Corporation');
     
     // Update root company to reference itself
     await this.entityModel.findByIdAndUpdate(rootCompanyId, {
-      companyId: rootCompanyId,
       entityIdPath: [rootCompanyId],
     });
 
@@ -315,7 +306,6 @@ class DatabaseSeeder {
       const deptId = entityMap.get(deptName);
       if (deptId) {
         await this.entityModel.findByIdAndUpdate(deptId, {
-          companyId: rootCompanyId, // Nearest ancestor company
           entityIdPath: [rootCompanyId, deptId],
         });
       }
@@ -327,20 +317,19 @@ class DatabaseSeeder {
       const teamId = entityMap.get(teamName);
       if (teamId && engineeringId) {
         await this.entityModel.findByIdAndUpdate(teamId, {
-          companyId: rootCompanyId, // Nearest ancestor company (UNICX Corporation)
           entityIdPath: [rootCompanyId, engineeringId, teamId],
         });
       }
     }
 
-    // Update users with entityIdPath and companyId
+    // Update users with entityIdPath
     await this.updateUserEntityFields(entityMap);
 
     // Update QR invitations and onboarding progress
     await this.updateQRInvitationsEntityFields(entityMap);
     await this.updateOnboardingProgressEntityFields(entityMap);
 
-    console.log('✅ Entity hierarchy, entityIdPath, and companyId updated');
+    console.log('✅ Entity hierarchy and entityIdPath updated');
   }
 
   async updateUserEntityFields(entityMap) {
@@ -357,7 +346,6 @@ class DatabaseSeeder {
       { email: { $in: ['admin@unicx.com', 'tenant.admin@unicx.com', 'pending.user@unicx.com', 'invited.user@unicx.com'] } },
       {
         entityId: rootCompanyId,
-        companyId: rootCompanyId,
         entityIdPath: [rootCompanyId],
       }
     );
@@ -367,7 +355,6 @@ class DatabaseSeeder {
       { email: 'engineering.manager@unicx.com' },
       {
         entityId: engineeringId,
-        companyId: rootCompanyId,
         entityIdPath: [rootCompanyId, engineeringId],
       }
     );
@@ -377,7 +364,6 @@ class DatabaseSeeder {
       { email: 'frontend.dev@unicx.com' },
       {
         entityId: frontendTeamId,
-        companyId: rootCompanyId,
         entityIdPath: [rootCompanyId, engineeringId, frontendTeamId],
       }
     );
@@ -387,7 +373,6 @@ class DatabaseSeeder {
       { email: 'backend.dev@unicx.com' },
       {
         entityId: backendTeamId,
-        companyId: rootCompanyId,
         entityIdPath: [rootCompanyId, engineeringId, backendTeamId],
       }
     );
@@ -397,7 +382,6 @@ class DatabaseSeeder {
       { email: 'sales.manager@unicx.com' },
       {
         entityId: salesId,
-        companyId: rootCompanyId,
         entityIdPath: [rootCompanyId, salesId],
       }
     );
@@ -407,7 +391,6 @@ class DatabaseSeeder {
       { email: 'marketing.specialist@unicx.com' },
       {
         entityId: marketingId,
-        companyId: rootCompanyId,
         entityIdPath: [rootCompanyId, marketingId],
       }
     );
@@ -417,12 +400,11 @@ class DatabaseSeeder {
       { email: 'hr.manager@unicx.com' },
       {
         entityId: hrId,
-        companyId: rootCompanyId,
         entityIdPath: [rootCompanyId, hrId],
       }
     );
 
-    console.log('✅ User entity fields (entityId, companyId, entityIdPath) updated');
+    console.log('✅ User entity fields (entityId, entityIdPath) updated');
   }
 
   async updateQRInvitationsEntityFields(entityMap) {

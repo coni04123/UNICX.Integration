@@ -1,11 +1,14 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, UserRole } from '../../common/schemas/user.schema';
 import { Entity } from '../../common/schemas/entity.schema';
 import { RegisterDto } from './dto/register.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 
 export interface JwtPayload {
   sub: string;
@@ -189,5 +192,80 @@ export class AuthService {
     const { password: _, ...userWithoutPassword } = userObj;
     
     return this.login(userWithoutPassword);
+  }
+
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<{ message: string }> {
+    const { email } = forgotPasswordDto;
+
+    // Find user by email
+    const user = await this.userModel.findOne({ 
+      email, 
+      isActive: true 
+    });
+
+    // Always return success message to prevent email enumeration
+    if (!user) {
+      return { 
+        message: 'If an account exists with this email, a password reset link has been sent.' 
+      };
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = await bcrypt.hash(resetToken, 10);
+    const resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour from now
+
+    // Save reset token to user
+    user.resetPasswordToken = resetTokenHash;
+    user.resetPasswordExpires = resetTokenExpires;
+    await user.save();
+
+    // In production, send email with reset link
+    // For now, log the token (in production, this should be sent via email)
+    console.log(`Password reset token for ${email}: ${resetToken}`);
+    console.log(`Reset link: ${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`);
+
+    // TODO: Integrate email service to send reset link
+    // await this.emailService.sendPasswordResetEmail(email, resetToken);
+
+    return { 
+      message: 'If an account exists with this email, a password reset link has been sent.',
+      // Include token in response for development/testing only
+      ...(process.env.NODE_ENV === 'development' && { resetToken })
+    };
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<{ message: string }> {
+    const { token, newPassword } = resetPasswordDto;
+
+    // Find all users with non-expired reset tokens
+    const users = await this.userModel.find({
+      resetPasswordExpires: { $gt: new Date() },
+      isActive: true
+    }).select('+resetPasswordToken +password');
+
+    // Find user by matching token
+    let matchedUser = null;
+    for (const user of users) {
+      if (user.resetPasswordToken && await bcrypt.compare(token, user.resetPasswordToken)) {
+        matchedUser = user;
+        break;
+      }
+    }
+
+    if (!matchedUser) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    // Hash new password
+    const hashedPassword = await this.hashPassword(newPassword);
+
+    // Update user password and clear reset token
+    matchedUser.password = hashedPassword;
+    matchedUser.resetPasswordToken = undefined;
+    matchedUser.resetPasswordExpires = undefined;
+    await matchedUser.save();
+
+    return { message: 'Password has been reset successfully' };
   }
 }

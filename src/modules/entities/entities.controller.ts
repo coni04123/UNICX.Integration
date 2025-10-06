@@ -84,7 +84,7 @@ export class EntitiesController {
   @Patch(':id')
   @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
   @RequireTenant()
-  @ApiOperation({ summary: 'Update entity (name only)' })
+  @ApiOperation({ summary: 'Update entity (name, type, and metadata)' })
   @ApiResponse({ status: 200, description: 'Entity updated successfully' })
   @ApiResponse({ status: 404, description: 'Entity not found' })
   @ApiResponse({ status: 403, description: 'Forbidden - cannot manage this entity' })

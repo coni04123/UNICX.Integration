@@ -33,8 +33,15 @@ export class UpdateEntityDto {
   @IsString()
   name?: string;
 
-  // Note: Type and metadata can only be set during creation
-  // Only name can be updated for existing entities
+  @ApiProperty({ enum: EntityType, example: EntityType.DEPARTMENT, required: false })
+  @IsOptional()
+  @IsEnum(EntityType)
+  type?: EntityType;
+
+  @ApiProperty({ example: { description: 'Updated description' }, required: false })
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, any>;
 }
 
 export class MoveEntityDto {

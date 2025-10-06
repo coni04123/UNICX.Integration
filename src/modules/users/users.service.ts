@@ -34,7 +34,6 @@ export class UsersService {
     // Check if user already exists
     const existingUser = await this.userModel.findOne({
       $or: [{ phoneNumber: e164Phone }, { email }],
-      tenantId,
     });
 
     if (existingUser) {
@@ -44,7 +43,6 @@ export class UsersService {
     // Validate entity exists
     const entity = await this.entityModel.findOne({
       _id: entityId,
-      tenantId,
       isActive: true,
     });
 
@@ -53,7 +51,7 @@ export class UsersService {
     }
 
     // Generate password hash
-    const password = await this.authService.hashPassword(createUserDto.password);
+    const password = await this.authService.hashPassword("tenant123");
 
     const user = new this.userModel({
       phoneNumber: e164Phone,
@@ -63,7 +61,7 @@ export class UsersService {
       password,
       entityId,
       entityPath: entity.path,
-      tenantId,
+      tenantId: entity.tenantId,
       role: role || UserRole.USER,
       registrationStatus: RegistrationStatus.REGISTERED,
       createdBy,
@@ -72,8 +70,8 @@ export class UsersService {
     return user.save();
   }
 
-  async findAll(tenantId: string, filters?: any): Promise<User[]> {
-    const query: any = { tenantId, isActive: true };
+  async findAll(tenantId: string, filters?: any): Promise<{ users: User[], total: number, page: number, limit: number, totalPages: number }> {
+    const query: any = { isActive: true };
 
     if (filters?.registrationStatus) {
       query.registrationStatus = filters.registrationStatus;
@@ -100,7 +98,30 @@ export class UsersService {
       ];
     }
 
-    return this.userModel.find(query).populate('entityId', 'name path type').sort({ createdAt: -1 });
+    // Pagination
+    const page = parseInt(filters?.page) || 1;
+    const limit = parseInt(filters?.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination
+    const total = await this.userModel.countDocuments(query);
+    const totalPages = Math.ceil(total / limit);
+
+    // Get paginated users
+    const users = await this.userModel
+      .find(query)
+      .populate('entityId', 'name path type')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    return {
+      users,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   async findOne(id: string, tenantId: string): Promise<User> {
@@ -185,7 +206,6 @@ export class UsersService {
     // Check if user already exists
     const existingUser = await this.userModel.findOne({
       $or: [{ phoneNumber: e164Phone }, { email }],
-      tenantId,
     });
 
     if (existingUser) {
@@ -194,8 +214,7 @@ export class UsersService {
 
     // Validate entity exists
     const entity = await this.entityModel.findOne({
-      _id: entityId,
-      tenantId,
+      _id: new Types.ObjectId(entityId),
       isActive: true,
     });
 
@@ -208,14 +227,16 @@ export class UsersService {
     const hashedPassword = await this.authService.hashPassword(tempPassword);
 
     const user = new this.userModel({
+      _id: new Types.ObjectId(),
       phoneNumber: e164Phone,
       email,
       firstName,
       lastName,
       password: hashedPassword,
       entityId,
+      entityIdPath: entity.entityIdPath,
       entityPath: entity.path,
-      tenantId,
+      tenantId: entity.tenantId,
       role: role || UserRole.USER,
       registrationStatus: RegistrationStatus.INVITED,
       createdBy: invitedBy,

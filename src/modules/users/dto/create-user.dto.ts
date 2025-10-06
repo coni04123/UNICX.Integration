@@ -110,7 +110,7 @@ export class InviteUserDto {
   @IsMongoId()
   entityId: string;
 
-  @ApiProperty({ example: 'tenant-123' })
+  @ApiProperty({ example: 'tenant-123', required: false })
   @IsString()
   tenantId: string;
 

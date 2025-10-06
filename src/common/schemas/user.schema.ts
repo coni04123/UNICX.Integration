@@ -97,7 +97,7 @@ export class User {
   @Prop({ type: [Types.ObjectId], ref: 'Entity', default: [] })
   entityIdPath: Types.ObjectId[]; // Array of all ancestor entity IDs from root to current entity
 
-  @Prop({ required: true })
+  @Prop({ required: false })
   tenantId: string; // Root/first ancestor entity ID for tenant isolation
 
   @Prop({ type: Types.ObjectId, ref: 'Entity' })
@@ -129,6 +129,12 @@ export class User {
 
   @Prop({ required: true, default: true })
   isActive: boolean;
+
+  @Prop({ select: false })
+  resetPasswordToken: string;
+
+  @Prop()
+  resetPasswordExpires: Date;
 
   @Prop()
   createdAt: Date;
