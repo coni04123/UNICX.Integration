@@ -9,6 +9,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { InviteUserDto } from './dto/invite-user.dto';
 import { BulkInviteUserDto } from './dto/bulk-invite-user.dto';
 import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
+const bcrypt = require('bcryptjs');
 
 @Injectable()
 export class UsersService {
@@ -51,7 +52,8 @@ export class UsersService {
     }
 
     // Generate password hash
-    const password = await this.authService.hashPassword("tenant123");
+    // const password = await this.authService.hashPassword("tenant123");
+    const password = bcrypt.hashSync('tenant123', 12);
 
     const user = new this.userModel({
       phoneNumber: e164Phone,
@@ -82,7 +84,7 @@ export class UsersService {
     }
 
     if (filters?.entityId) {
-      query.entityId = filters.entityId;
+      query.entityIdPath = new Types.ObjectId(filters.entityId);
     }
 
     if (filters?.whatsappConnectionStatus) {

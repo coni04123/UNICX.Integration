@@ -82,7 +82,7 @@ export class EntitiesService {
     let query: any;
     
     if (tenantId)
-    query = { tenantId, isActive: true };
+    query = { tenantId: new Types.ObjectId(tenantId), isActive: true };
     else query = { isActive: true };
 
     if (filters?.type) {
