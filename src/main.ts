@@ -24,7 +24,7 @@ async function bootstrap() {
   );
 
   // CORS configuration
-  const corsOrigins = configService.get<string[]>('security.corsOrigin', ['http://localhost:3000']);
+  const corsOrigins = configService.get<string[]>('security.corsOrigin', ['http://localhost:3000', 'https://unicx-frontend-pi.vercel.app']);
   app.enableCors({
     origin: corsOrigins,
     credentials: true,
