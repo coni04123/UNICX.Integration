@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { WhatsAppSession, SessionStatus } from '../../common/schemas/whatsapp-session.schema';
 import { Message, MessageDirection, MessageStatus, MessageType } from '../../common/schemas/message.schema';
 import { Types } from 'mongoose';
-import os from 'os';
+import * as os from 'os';
 
 @Injectable()
 export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
