@@ -298,7 +298,7 @@ export class UsersService {
 
     // Generate temporary password
     const tempPassword = Math.random().toString(36).slice(-8);
-    const hashedPassword = await this.authService.hashPassword("admin123");
+    const hashedPassword = await this.authService.hashPassword(tempPassword);
 
     const newUserId:Types.ObjectId = new Types.ObjectId();
 
@@ -329,58 +329,104 @@ export class UsersService {
 
     // Create WhatsApp session and send QR code via email (only for users with phone numbers)
     if (e164Phone) {
-      try {
-        const sessionId = `whatsapp-${e164Phone.slice(1)}`;
-        this.logger.log(`Creating WhatsApp session for user: ${sessionId}`);
-        
-        await this.whatsappService.createSession(
-          sessionId,
-          newUserId,
-          invitedBy,
-          entityId,
-          entity.tenantId.toString(),
-        );
+      (async () => {
+        try {
+          const sessionId = `whatsapp-${e164Phone.slice(1)}`;
+          this.logger.log(`Creating WhatsApp session for user: ${sessionId}`);
+          
+          await this.whatsappService.createSession(
+            sessionId,
+            newUserId,
+            invitedBy,
+            entityId,
+            entity.tenantId.toString(),
+          );
 
-        // Wait up to 30 seconds for QR code generation
-        let qrCodeData = null;
-        for (let i = 0; i < 30; i++) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          qrCodeData = await this.whatsappService.getQRCode(sessionId);
-          if (qrCodeData) {
-            this.logger.log(`QR code generated for session: ${sessionId}`);
-            break;
+          // Wait up to 30 seconds for QR code generation
+          let qrCodeData = null;
+          for (let i = 0; i < 30; i++) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            qrCodeData = await this.whatsappService.getQRCode(sessionId);
+            if (qrCodeData) {
+              this.logger.log(`QR code generated for session: ${sessionId}`);
+              break;
+            }
           }
-        }
 
-      // Send invitation email with QR code
-      // if (qrCodeData) {
-      //   await this.emailService.sendInvitationEmailWithQR(email, {
-      //     firstName,
-      //     lastName,
-      //     qrCode: qrCodeData.qrCode,
-      //     sessionId,
-      //     tempPassword,
-      //     expiresAt: qrCodeData.expiresAt,
-      //   });
-      //   this.logger.log(`Invitation email with QR code sent to ${email}`);
-      // } else {
-      //   // Send invitation without QR code if generation failed
-      //   this.logger.warn(`QR code not generated in time for session: ${sessionId}`);
-      //   await this.emailService.sendInvitationEmail(email, 'invitation', {
-      //     firstName,
-      //     lastName,
-      //     tempPassword,
-      //     subject: 'Welcome to UNICX',
-      //   });
-      // }
-      } catch (error) {
-        this.logger.error(`Failed to create WhatsApp session or send email: ${error.message}`, error);
-        // Don't fail user creation if WhatsApp/email fails
-      }
+          // Send invitation email with QR code
+          if (qrCodeData) {
+            await this.emailService.sendInvitationEmailWithQR(email, {
+              firstName,
+              lastName,
+              qrCode: qrCodeData.qrCode,
+              sessionId,
+              tempPassword,
+              expiresAt: qrCodeData.expiresAt,
+            });
+            this.logger.log(`Invitation email with QR code sent to ${email}`);
+          } else {
+            // Send invitation without QR code if generation failed
+            this.logger.warn(`QR code not generated in time for session: ${sessionId}`);
+            await this.emailService.sendInvitationEmail(email, 'invitation', {
+              firstName,
+              lastName,
+              tempPassword,
+              subject: 'Welcome to UNICX',
+            });
+          }
+        } catch (error) {
+          this.logger.error(`Failed to create WhatsApp session or send email: ${error.message}`, error);
+          // Don't fail user creation if WhatsApp/email fails
+        }
+      })
     } else {
-      // For TenantAdmin without phone number, just send a simple invitation email
-      this.logger.log(`Tenant Admin invitation (no WhatsApp): ${email}`);
-      // TODO: Send admin invitation email without QR code
+      // For TenantAdmin without phone number, send a beautiful admin invitation email
+      this.logger.log(`Sending Tenant Admin invitation to: ${email}`);
+      try {
+        await this.emailService.sendInvitationEmail(email, 'tenant-admin-invitation', {
+          firstName,
+          lastName,
+          tempPassword,
+          subject: 'Welcome to UNICX - Tenant Administrator Access',
+          role: 'Tenant Administrator',
+          entity: {
+            name: entity.name,
+            path: entity.path,
+            type: entity.type
+          },
+          loginUrl: process.env.FRONTEND_URL + '/login',
+          features: [
+            {
+              title: 'User Management',
+              description: 'Invite and manage users within your organization'
+            },
+            {
+              title: 'Entity Structure',
+              description: 'Organize your company structure and departments'
+            },
+            {
+              title: 'Communication Monitoring',
+              description: 'Monitor and analyze WhatsApp communications'
+            },
+            {
+              title: 'Advanced Analytics',
+              description: 'Access detailed reports and analytics'
+            }
+          ],
+          supportEmail: process.env.SUPPORT_EMAIL || 'support@unicx.com',
+          companyName: process.env.COMPANY_NAME || 'UNICX',
+          companyAddress: process.env.COMPANY_ADDRESS || '123 Business Street, Tech City',
+          socialLinks: {
+            website: process.env.COMPANY_WEBSITE || 'https://unicx.com',
+            linkedin: process.env.COMPANY_LINKEDIN,
+            twitter: process.env.COMPANY_TWITTER
+          }
+        });
+        this.logger.log(`Tenant Admin invitation email sent to ${email}`);
+      } catch (error) {
+        this.logger.error(`Failed to send Tenant Admin invitation email: ${error.message}`, error);
+        // Don't fail user creation if email fails
+      }
     }
 
     return savedUser;
