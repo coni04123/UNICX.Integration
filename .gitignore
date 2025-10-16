@@ -18,7 +18,8 @@ lerna-debug.log*
 # Tests
 /coverage
 /.nyc_output
-
+/.wwebjs_auth
+/.wwebjs_cache
 # IDEs and editors
 /.idea
 .project

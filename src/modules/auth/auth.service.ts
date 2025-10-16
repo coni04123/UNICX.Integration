@@ -62,7 +62,7 @@ export class AuthService {
       sub: user._id.toString(),
       email: user.email,
       role: user.role,
-      tenantId: user?.tenantId,
+      tenantId: user?.tenantId?.toString(),
       entityId: user?.entityId?.toString(),
     };
 
@@ -81,7 +81,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
-        tenantId: user?.tenantId,
+        tenantId: user?.tenantId?.toString(),
         entityId: user?.entityId?.toString(),
         entityPath: user?.entityPath,
       },
@@ -103,8 +103,8 @@ export class AuthService {
         sub: user._id.toString(),
         email: user.email,
         role: user.role,
-        tenantId: user.tenantId,
-        entityId: user.entityId.toString(),
+        tenantId: user.tenantId?.toString(),
+        entityId: user.entityId?.toString(),
       };
 
       return {

@@ -1,98 +1,45 @@
 import { Process, Processor } from '@nestjs/bull';
+import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
-import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { QRInvitation } from '../../schemas/qr-invitation.schema';
-import * as QRCode from 'qrcode';
-import * as crypto from 'crypto';
+import { WhatsAppSession, SessionStatus } from '../../schemas/whatsapp-session.schema';
+import { User, RegistrationStatus } from '../../schemas/user.schema';
 
-export interface QRCodeJobData {
-  invitationId: string;
-  payload: Record<string, any>;
-  tenantId: string;
-}
-
-@Injectable()
 @Processor('qr-code')
 export class QRCodeProcessor {
   private readonly logger = new Logger(QRCodeProcessor.name);
 
   constructor(
-    @InjectModel(QRInvitation.name)
-    private qrInvitationModel: Model<QRInvitation>,
+    @InjectModel(WhatsAppSession.name)
+    private whatsappSessionModel: Model<WhatsAppSession>,
+    @InjectModel(User.name)
+    private userModel: Model<User>,
   ) {}
 
-  @Process('generate-qr')
-  async handleGenerateQR(job: Job<QRCodeJobData>) {
-    const { invitationId, payload, tenantId } = job.data;
+  @Process('generate')
+  async handleGeneration(job: Job<{ userId: string }>) {
+    const { userId } = job.data;
+    this.logger.debug(`Processing QR code generation for user ${userId}`);
 
-    try {
-      this.logger.log(`Generating QR code for invitation ${invitationId}`);
-
-      // Generate unique QR code ID
-      const qrCodeId = crypto.randomUUID();
-
-      // Encrypt payload
-      const encryptedPayload = this.encryptPayload(JSON.stringify(payload));
-
-      // Generate QR code image
-      const qrCodeImage = await QRCode.toDataURL(JSON.stringify({
-        qrCodeId,
-        tenantId,
-        timestamp: Date.now(),
-      }));
-
-      // Update invitation with QR code data
-      await this.qrInvitationModel.findByIdAndUpdate(invitationId, {
-        qrCodeId,
-        encryptedPayload,
-        qrCodeImage,
-      });
-
-      this.logger.log(`QR code generated successfully for invitation ${invitationId}`);
-    } catch (error) {
-      this.logger.error(`Failed to generate QR code for invitation ${invitationId}:`, error);
-      throw error;
+    const user = await this.userModel.findById(userId);
+    if (!user?.phoneNumber) {
+      throw new Error(`User ${userId} not found or has no phone number`);
     }
-  }
 
-  @Process('generate-bulk-qr')
-  async handleBulkQRGeneration(job: Job<QRCodeJobData[]>) {
-    const qrCodes = job.data;
+    const sessionId = `whatsapp-${user.phoneNumber.slice(1)}`;
+    const session = await this.whatsappSessionModel.findOne({
+      sessionId,
+      isActive: true,
+    });
 
-    for (const qrCode of qrCodes) {
-      try {
-        await this.handleGenerateQR({ data: qrCode } as Job<QRCodeJobData>);
-      } catch (error) {
-        this.logger.error(`Failed to process bulk QR generation:`, error);
-        // Continue with next QR code
-      }
+    if (!session) {
+      throw new Error(`WhatsApp session not found for user ${userId}`);
     }
-  }
 
-  private encryptPayload(payload: string): string {
-    const algorithm = 'aes-256-gcm';
-    const key = crypto.scryptSync(process.env.QR_CODE_ENCRYPTION_KEY || 'default-key', 'salt', 32);
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipher(algorithm, key);
-    
-    let encrypted = cipher.update(payload, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    
-    return iv.toString('hex') + ':' + encrypted;
-  }
+    // QR code generation is handled by WhatsApp service
+    // This processor just ensures the session exists and is ready
 
-  private decryptPayload(encryptedPayload: string): string {
-    const algorithm = 'aes-256-gcm';
-    const key = crypto.scryptSync(process.env.QR_CODE_ENCRYPTION_KEY || 'default-key', 'salt', 32);
-    const [ivHex, encrypted] = encryptedPayload.split(':');
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipher(algorithm, key);
-    
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    
-    return decrypted;
+    return { success: true, sessionId };
   }
 }

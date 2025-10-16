@@ -6,6 +6,7 @@ import { User, UserRole } from '../../common/schemas/user.schema';
 import { CreateEntityDto } from './dto/create-entity.dto';
 import { UpdateEntityDto } from './dto/update-entity.dto';
 import { MoveEntityDto } from './dto/move-entity.dto';
+import { SYSTEM_ENTITY_ID, isSystemEntity } from '../../common/constants/system-entity';
 
 @Injectable()
 export class EntitiesService {
@@ -18,6 +19,7 @@ export class EntitiesService {
 
   async create(createEntityDto: CreateEntityDto, userId: string, userRole: string, userEntityId: string): Promise<Entity> {
     const { name, type, parentId, metadata } = createEntityDto;
+
 
     // Validate parent exists if provided
     let parent: Entity | null = null;
@@ -101,7 +103,7 @@ export class EntitiesService {
       query.name = { $regex: filters.search, $options: 'i' };
     }
 
-    if (filters?.ancestorId) {
+    if (filters?.ancestorId && filters?.ancestorId !== SYSTEM_ENTITY_ID.toString()) {
       query.entityIdPath = new Types.ObjectId(filters.ancestorId); 
     }
 
@@ -123,7 +125,12 @@ export class EntitiesService {
   }
 
   async findHierarchy(tenantId: string, maxDepth?: number): Promise<Entity[]> {
-    const query: any = { tenantId, isActive: true };
+    const query: any = { isActive: true };
+    
+    // Only filter by tenantId if provided (SystemAdmin has no tenantId)
+    if (tenantId && tenantId !== '') {
+      query.tenantId = new Types.ObjectId(tenantId);
+    }
 
     if (maxDepth !== undefined) {
       query.level = { $lte: maxDepth };
@@ -195,11 +202,17 @@ export class EntitiesService {
 
     // Validate new parent exists if provided
     if (newParentId) {
-      const newParent = await this.entityModel.findOne({
+      const newParentQuery: any = {
         _id: newParentId,
-        tenantId,
         isActive: true,
-      });
+      };
+      
+      // Only filter by tenantId if provided (SystemAdmin has no tenantId)
+      if (tenantId && tenantId !== '') {
+        newParentQuery.tenantId = new Types.ObjectId(tenantId);
+      }
+      
+      const newParent = await this.entityModel.findOne(newParentQuery);
 
       if (!newParent) {
         throw new NotFoundException('New parent entity not found');
@@ -274,8 +287,14 @@ export class EntitiesService {
   }
 
   async getEntityStats(tenantId: string): Promise<any> {
+    // Build match query - only include tenantId if provided (SystemAdmin has no tenantId)
+    const matchQuery: any = { isActive: true };
+    if (tenantId && tenantId !== '') {
+      matchQuery.tenantId = new Types.ObjectId(tenantId);
+    }
+
     const stats = await this.entityModel.aggregate([
-      { $match: { tenantId, isActive: true } },
+      { $match: matchQuery },
       {
         $group: {
           _id: '$type',
@@ -285,14 +304,31 @@ export class EntitiesService {
       },
     ]);
 
-    const totalEntities = await this.entityModel.countDocuments({ tenantId, isActive: true });
-    const totalUsers = await this.userModel.countDocuments({ tenantId, isActive: true });
+    const totalEntities = await this.entityModel.countDocuments(matchQuery);
+    const totalUsers = await this.userModel.countDocuments(matchQuery);
 
     return {
       totalEntities,
       totalUsers,
       byType: stats,
     };
+  }
+
+  /**
+   * Check if an entity is the System entity
+   * @param entityId - The entity ID to check
+   * @returns true if the entity is the System entity
+   */
+  isSystemEntity(entityId: Types.ObjectId | string): boolean {
+    return isSystemEntity(entityId);
+  }
+
+  /**
+   * Get the System entity ID constant
+   * @returns The System entity ObjectId
+   */
+  getSystemEntityId(): Types.ObjectId {
+    return SYSTEM_ENTITY_ID;
   }
 
   private async generatePath(name: string, parentId: string | null): Promise<string> {

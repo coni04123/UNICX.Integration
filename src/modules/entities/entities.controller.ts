@@ -136,7 +136,7 @@ export class EntitiesController {
   @ApiResponse({ status: 403, description: 'Forbidden - cannot manage this entity' })
   async remove(@Param('id') id: string, @Request() req) {
     await this.entitiesService.remove(
-      id, 
+      id,
       req.user.sub, 
       req.user.tenantId, 
       req.user.role, 

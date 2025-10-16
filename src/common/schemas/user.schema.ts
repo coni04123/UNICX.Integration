@@ -1,7 +1,15 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-export type UserDocument = User & Document;
+export type WhatsAppQR = {
+  qrCode: string;
+  expiresAt: Date;
+  sessionId: string;
+};
+
+export type UserDocument = User & Document & {
+  whatsappQR?: WhatsAppQR;
+};
 
 export enum UserRole {
   SYSTEM_ADMIN = 'SystemAdmin',
@@ -67,8 +75,8 @@ export class User {
   @Prop({ type: Types.ObjectId, auto: true })
   _id: Types.ObjectId;
 
-  @Prop({ required: true, unique: true })
-  phoneNumber: string; // E164 format
+  @Prop({ required: false, sparse: true })
+  phoneNumber: string; // E164 format - Optional for TenantAdmin
 
   @Prop({ required: true })
   firstName: string;
@@ -97,8 +105,8 @@ export class User {
   @Prop({ type: [Types.ObjectId], ref: 'Entity', default: [] })
   entityIdPath: Types.ObjectId[]; // Array of all ancestor entity IDs from root to current entity
 
-  @Prop({ required: false })
-  tenantId: string; // Root/first ancestor entity ID for tenant isolation
+  @Prop({ type: Types.ObjectId, ref: 'Entity', required: false })
+  tenantId: Types.ObjectId; // Root/first ancestor entity ID for tenant isolation
 
   @Prop({ type: Types.ObjectId, ref: 'Entity' })
   companyId: Types.ObjectId; // Nearest ancestor entity with type 'company'
@@ -146,7 +154,8 @@ export class User {
 export const UserSchema = SchemaFactory.createForClass(User);
 
 // Indexes for performance
-UserSchema.index({ phoneNumber: 1 }, { unique: true });
+// Use partial index to ensure uniqueness only for non-null phone numbers
+UserSchema.index({ phoneNumber: 1 });
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ tenantId: 1, isActive: 1 });
 UserSchema.index({ entityId: 1 });

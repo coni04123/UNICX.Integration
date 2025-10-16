@@ -16,9 +16,10 @@ export enum RegistrationStatus {
 }
 
 export class CreateUserDto {
-  @ApiProperty({ example: '+1234567890' })
+  @ApiProperty({ example: '+1234567890', required: false })
+  @IsOptional()
   @IsString()
-  phoneNumber: string;
+  phoneNumber?: string;
 
   @ApiProperty({ example: 'user@example.com' })
   @IsEmail()
@@ -90,9 +91,10 @@ export class UpdateUserDto {
 }
 
 export class InviteUserDto {
-  @ApiProperty({ example: '+1234567890' })
+  @ApiProperty({ example: '+1234567890', required: false })
+  @IsOptional()
   @IsString()
-  phoneNumber: string;
+  phoneNumber?: string;
 
   @ApiProperty({ example: 'user@example.com' })
   @IsEmail()

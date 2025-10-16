@@ -15,9 +15,9 @@ import { validationSchema } from './config/validation';
 import { AuthModule } from './modules/auth/auth.module';
 import { EntitiesModule } from './modules/entities/entities.module';
 import { UsersModule } from './modules/users/users.module';
-import { QrCodesModule } from './modules/qr-codes/qr-codes.module';
-import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { UserManagementModule } from './modules/user-management/user-management.module';
 import { EmailModule } from './modules/email/email.module';
+import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 
 // Common
 import { DatabaseModule } from './common/database/database.module';
@@ -96,9 +96,9 @@ import { HealthModule } from './common/health/health.module';
     AuthModule,
     EntitiesModule,
     UsersModule,
-    QrCodesModule,
-    OnboardingModule,
+    UserManagementModule,
     EmailModule,
+    WhatsAppModule,
   ],
 })
 export class AppModule {}

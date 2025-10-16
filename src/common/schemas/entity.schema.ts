@@ -4,6 +4,7 @@ import { Document, Types } from 'mongoose';
 export type EntityDocument = Entity & Document;
 
 export enum EntityType {
+  SYSTEM = 'system',
   ENTITY = 'entity',
   COMPANY = 'company',
   DEPARTMENT = 'department',
