@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { WhatsAppSession, SessionStatus } from '../../common/schemas/whatsapp-session.schema';
 import { Message, MessageDirection, MessageStatus, MessageType } from '../../common/schemas/message.schema';
 import { Types } from 'mongoose';
+import os from 'os';
 
 @Injectable()
 export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
@@ -73,10 +74,24 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    let chromePath;
+
+    if (os.platform() === "win32") {
+      // Windows
+      chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+    } else if (os.platform() === "linux") {
+      // Linux
+      // Check common paths
+      chromePath = "/usr/bin/chromium-browser"; // or "/usr/bin/chromium-browser"
+    } else if (os.platform() === "darwin") {
+      // macOS
+      chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    }
+
     const client = new Client({
       authStrategy: new LocalAuth({ clientId: sessionId }),
       puppeteer: {
-        executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", // path to Chrome
+        executablePath: chromePath, // path to Chrome
         headless: true,
         args: ["--no-sandbox", "--disable-setuid-sandbox"],
       },
