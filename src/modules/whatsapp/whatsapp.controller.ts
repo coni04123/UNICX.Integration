@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles, RequireTenant } from '../auth/decorators';
 import { UserRole } from '../../common/schemas/user.schema';
+import { SYSTEM_ENTITY_ID } from '@/common/constants/system-entity';
 
 @ApiTags('WhatsApp')
 @Controller('whatsapp')
@@ -102,9 +103,12 @@ export class WhatsAppController {
   async getMessages(@Query() query: any, @Request() req) {
     const filters = {
       ...query,
-      tenantId: req.user.tenantId,
-      entityId: query.entityId || req.user.entityId,
     };
+
+    if (query.entityId || req.user.entityId !== SYSTEM_ENTITY_ID.toString()) {
+      filters.entityId = query.entityId || req.user.entityId;
+    }
+
     return this.whatsappService.getMessages(filters);
   }
 

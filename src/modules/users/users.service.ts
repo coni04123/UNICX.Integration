@@ -114,7 +114,8 @@ export class UsersService {
     }
 
     if (filters?.entityId) {
-      query.entityIdPath = new Types.ObjectId(filters.entityId);
+      if (filters?.entityId !== SYSTEM_ENTITY_ID.toString())
+        query.entityIdPath = new Types.ObjectId(filters.entityId);
     }
 
     if (filters?.whatsappConnectionStatus) {
