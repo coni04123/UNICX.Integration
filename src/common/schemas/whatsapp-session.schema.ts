@@ -27,6 +27,9 @@ export class WhatsAppSession {
   @Prop({ type: Types.ObjectId, ref: 'Entity', required: true })
   entityId: Types.ObjectId;
 
+  @Prop({ type: [Types.ObjectId], default: [] })
+  entityIdPath: Types.ObjectId[]; // Array of entity IDs representing the path from root to leaf
+
   @Prop({ type: Types.ObjectId, ref: 'Entity', required: true })
   tenantId: Types.ObjectId;
 
@@ -124,6 +127,7 @@ export const WhatsAppSessionSchema = SchemaFactory.createForClass(WhatsAppSessio
 WhatsAppSessionSchema.index({ sessionId: 1 }, { unique: true });
 WhatsAppSessionSchema.index({ userId: 1 });
 WhatsAppSessionSchema.index({ entityId: 1 });
+WhatsAppSessionSchema.index({ entityIdPath: 1 });
 WhatsAppSessionSchema.index({ tenantId: 1, isActive: 1 });
 WhatsAppSessionSchema.index({ status: 1 });
 WhatsAppSessionSchema.index({ phoneNumber: 1 });

@@ -102,6 +102,9 @@ export class Message {
   @Prop({ type: Types.ObjectId, ref: 'Entity', required: true })
   entityId: Types.ObjectId;
 
+  @Prop({ type: [Types.ObjectId], default: [] })
+  entityIdPath: Types.ObjectId[]; // Array of entity IDs representing the path from root to leaf
+
   @Prop({ type: Types.ObjectId, ref: 'Entity', required: true })
   tenantId: Types.ObjectId;
 
@@ -132,7 +135,7 @@ export class Message {
 export const MessageSchema = SchemaFactory.createForClass(Message);
 
 // Indexes for performance
-MessageSchema.index({ whatsappMessageId: 1 }, { unique: true });
+MessageSchema.index({ whatsappMessageId: 1 });
 MessageSchema.index({ from: 1, to: 1 });
 MessageSchema.index({ tenantId: 1, isActive: 1 });
 MessageSchema.index({ entityId: 1 });

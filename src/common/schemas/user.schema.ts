@@ -155,7 +155,14 @@ export const UserSchema = SchemaFactory.createForClass(User);
 
 // Indexes for performance
 // Use partial index to ensure uniqueness only for non-null phone numbers
-UserSchema.index({ phoneNumber: 1 });
+UserSchema.index(
+  { phoneNumber: 1 },
+  { 
+    unique: true,
+    sparse: true,
+    partialFilterExpression: { phoneNumber: { $type: 'string' } }
+  }
+);
 UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ tenantId: 1, isActive: 1 });
 UserSchema.index({ entityId: 1 });

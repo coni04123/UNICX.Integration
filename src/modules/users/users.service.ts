@@ -6,6 +6,7 @@ import { Entity } from '../../common/schemas/entity.schema';
 import { AuthService } from '../auth/auth.service';
 import { EmailService } from '../email/email.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
+import { AuditService, AuditAction } from '../../common/audit/audit.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InviteUserDto } from './dto/invite-user.dto';
@@ -27,6 +28,7 @@ export class UsersService {
     private emailService: EmailService,
     @Inject(forwardRef(() => WhatsAppService))
     private whatsappService: WhatsAppService,
+    private auditService: AuditService,
   ) {}
 
   async create(createUserDto: CreateUserDto, createdBy: string): Promise<User> {
@@ -309,7 +311,7 @@ export class UsersService {
       firstName,
       lastName,
       password: hashedPassword,
-      entityId,
+      entityId:new Types.ObjectId(entityId),
       entityIdPath: entity.entityIdPath,
       entityPath: entity.path,
       tenantId: entity.tenantId,
@@ -327,6 +329,9 @@ export class UsersService {
 
     const savedUser = await user.save();
 
+    // Declare qrCodeData at method level for audit logging
+    let qrCodeData = null;
+
     // Create WhatsApp session and send QR code via email (only for users with phone numbers)
     if (e164Phone) {
       (async () => {
@@ -342,14 +347,28 @@ export class UsersService {
             entity.tenantId.toString(),
           );
 
-          // Wait up to 30 seconds for QR code generation
-          let qrCodeData = null;
-          for (let i = 0; i < 30; i++) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            qrCodeData = await this.whatsappService.getQRCode(sessionId);
-            if (qrCodeData) {
-              this.logger.log(`QR code generated for session: ${sessionId}`);
-              break;
+          // Try to get QR code with exponential backoff (3 attempts)
+          const maxAttempts = 3;
+          const baseDelay = 5000; // 5 seconds
+
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            this.logger.log(`Attempt ${attempt}/${maxAttempts} to generate QR code for session: ${sessionId}`);
+            
+            // Wait with exponential backoff
+            const delay = baseDelay * Math.pow(2, attempt - 1);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            
+            try {
+              qrCodeData = await this.whatsappService.getQRCode(sessionId);
+              if (qrCodeData) {
+                this.logger.log(`QR code generated for session: ${sessionId} on attempt ${attempt}`);
+                break;
+              }
+            } catch (error) {
+              this.logger.warn(`Failed to get QR code on attempt ${attempt}: ${error.message}`);
+              if (attempt === maxAttempts) {
+                throw error; // Rethrow on last attempt
+              }
             }
           }
 
@@ -365,13 +384,19 @@ export class UsersService {
             });
             this.logger.log(`Invitation email with QR code sent to ${email}`);
           } else {
-            // Send invitation without QR code if generation failed
+            // Update WhatsApp connection status to FAILED and send invitation without QR code
             this.logger.warn(`QR code not generated in time for session: ${sessionId}`);
+            await this.updateWhatsAppConnectionStatus(
+              newUserId.toString(),
+              WhatsAppConnectionStatus.FAILED,
+              entity.tenantId.toString()
+            );
             await this.emailService.sendInvitationEmail(email, 'invitation', {
               firstName,
               lastName,
               tempPassword,
-              subject: 'Welcome to UNICX',
+              subject: 'Welcome to UNICX - WhatsApp Setup Required',
+              message: 'Your WhatsApp connection could not be established automatically. Please contact support for assistance in setting up your WhatsApp connection.',
             });
           }
         } catch (error) {
@@ -427,6 +452,39 @@ export class UsersService {
         this.logger.error(`Failed to send Tenant Admin invitation email: ${error.message}`, error);
         // Don't fail user creation if email fails
       }
+    }
+
+    // Log audit event
+    try {
+      await this.auditService.log(
+        invitedBy,
+        '', // userEmail will be filled by the audit service
+        tenantId,
+        AuditAction.INVITE,
+        'user',
+        savedUser._id.toString(),
+        undefined,
+        {
+          email: savedUser.email,
+          firstName: savedUser.firstName,
+          lastName: savedUser.lastName,
+          role: savedUser.role,
+          entityId: savedUser.entityId.toString(),
+          phoneNumber: savedUser.phoneNumber,
+        },
+        undefined, // ipAddress
+        undefined, // userAgent
+        undefined, // endpoint
+        undefined, // method
+        {
+          invitationType: role === UserRole.TENANT_ADMIN ? 'tenant_admin' : 'user',
+          tempPasswordGenerated: true,
+          emailSent: true,
+          qrCodeGenerated: role !== UserRole.TENANT_ADMIN && qrCodeData ? true : false,
+        }
+      );
+    } catch (auditError) {
+      this.logger.warn('Failed to log audit event for user invitation:', auditError);
     }
 
     return savedUser;
@@ -586,5 +644,96 @@ export class UsersService {
     }
     
     return this.userModel.find(searchQuery).limit(20);
+  }
+
+  /**
+   * Regenerate WhatsApp QR code for a user
+   * @param userId - The ID of the user
+   * @param tenantId - The tenant ID
+   * @returns Object containing the new QR code data
+   */
+  async regenerateQRCode(userId: string, tenantId: string): Promise<{ qrCode: string; expiresAt: Date; sessionId: string }> {
+    // Find the user and verify they have a phone number
+    const user = await this.findOne(userId, tenantId);
+    if (!user.phoneNumber) {
+      throw new BadRequestException('User does not have a phone number configured');
+    }
+
+    const sessionId = `whatsapp-${user.phoneNumber.slice(1)}`;
+
+    try {
+      // Disconnect existing session if any
+      await this.whatsappService.disconnectSession(sessionId);
+      console.log("Yes Connect 1", user, user.entityId, user.tenantId);
+      // Create new session
+      await this.whatsappService.createSession(
+        sessionId,
+        new Types.ObjectId(userId),
+        userId, // Use the user's ID as the creator since we don't have updatedBy/createdBy
+        user.entityId.toString(),
+        user.tenantId.toString(),
+      );
+
+      console.log("Yes Connect 2");
+
+      // Update user status to connecting
+      await this.updateWhatsAppConnectionStatus(
+        userId,
+        WhatsAppConnectionStatus.CONNECTING,
+        tenantId
+      );
+
+      console.log("Yes Connect 3");
+
+      // Try to get QR code with exponential backoff
+      let qrCodeData = null;
+      const maxAttempts = 3;
+      const baseDelay = 5000; // 5 seconds
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        this.logger.log(`Attempt ${attempt}/${maxAttempts} to generate QR code for session: ${sessionId}`);
+        
+        // Wait with exponential backoff
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        try {
+          qrCodeData = await this.whatsappService.getQRCode(sessionId);
+          if (qrCodeData) {
+            this.logger.log(`QR code generated for session: ${sessionId} on attempt ${attempt}`);
+            break;
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to get QR code on attempt ${attempt}: ${error.message}`);
+          if (attempt === maxAttempts) {
+            throw error;
+          }
+        }
+      }
+
+      if (!qrCodeData) {
+        // Update status to failed if QR generation failed
+        await this.updateWhatsAppConnectionStatus(
+          userId,
+          WhatsAppConnectionStatus.FAILED,
+          tenantId
+        );
+        throw new Error('Failed to generate QR code after multiple attempts');
+      }
+
+      return {
+        qrCode: qrCodeData.qrCode,
+        expiresAt: qrCodeData.expiresAt,
+        sessionId
+      };
+    } catch (error) {
+      // Update status to failed on error
+      await this.updateWhatsAppConnectionStatus(
+        userId,
+        WhatsAppConnectionStatus.FAILED,
+        tenantId
+      );
+      throw new BadRequestException(`Failed to regenerate QR code: ${error.message}`);
+    }
   }
 }

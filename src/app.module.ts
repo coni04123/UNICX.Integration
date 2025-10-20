@@ -18,6 +18,8 @@ import { UsersModule } from './modules/users/users.module';
 import { UserManagementModule } from './modules/user-management/user-management.module';
 import { EmailModule } from './modules/email/email.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 // Common
 import { DatabaseModule } from './common/database/database.module';
@@ -99,6 +101,8 @@ import { HealthModule } from './common/health/health.module';
     UserManagementModule,
     EmailModule,
     WhatsAppModule,
+    AuditModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

@@ -1,0 +1,72 @@
+import { Controller, Get, Query, UseGuards, Logger, Req } from '@nestjs/common';
+import { Request } from 'express';
+import { DashboardService } from './dashboard.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantGuard } from '../auth/tenant.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/decorators';
+import { UserRole } from '../../common/schemas/user.schema';
+// Removed GetUser import as it doesn't exist
+
+@Controller('dashboard')
+@UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+export class DashboardController {
+  private readonly logger = new Logger(DashboardController.name);
+
+  constructor(private readonly dashboardService: DashboardService) {}
+
+  @Get('stats')
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN, UserRole.USER)
+  async getDashboardStats(@Req() req: Request) {
+    try {
+      const tenantId = req.user['tenantId'];
+      const stats = await this.dashboardService.getDashboardStats(tenantId);
+      
+      return {
+        success: true,
+        data: stats,
+      };
+    } catch (error) {
+      this.logger.error('Failed to get dashboard stats:', error);
+      throw error;
+    }
+  }
+
+  @Get('recent-activity')
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
+  async getRecentActivity(
+    @Req() req: Request,
+    @Query('limit') limit?: string,
+  ) {
+    try {
+      const tenantId = req.user['tenantId'];
+      const limitNum = limit ? parseInt(limit, 10) : 10;
+      const activity = await this.dashboardService.getRecentActivity(tenantId, limitNum);
+      
+      return {
+        success: true,
+        data: activity,
+      };
+    } catch (error) {
+      this.logger.error('Failed to get recent activity:', error);
+      throw error;
+    }
+  }
+
+  @Get('system-health')
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
+  async getSystemHealth(@Req() req: Request) {
+    try {
+      const tenantId = req.user['tenantId'];
+      const health = await this.dashboardService.getSystemHealth(tenantId);
+      
+      return {
+        success: true,
+        data: health,
+      };
+    } catch (error) {
+      this.logger.error('Failed to get system health:', error);
+      throw error;
+    }
+  }
+}

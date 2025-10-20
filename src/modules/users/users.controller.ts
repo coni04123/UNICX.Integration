@@ -159,4 +159,14 @@ export class UsersController {
     await this.usersService.remove(id, req.user.sub, req.user.tenantId);
     return { message: 'User deleted successfully' };
   }
+
+  @Post(':id/regenerate-qr')
+  @RequireTenant()
+  @ApiOperation({ summary: 'Regenerate WhatsApp QR code for user' })
+  @ApiResponse({ status: 200, description: 'QR code regenerated successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - User has no phone number or QR generation failed' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async regenerateQRCode(@Param('id') id: string, @Request() req) {
+    return this.usersService.regenerateQRCode(id, req.user.tenantId);
+  }
 }

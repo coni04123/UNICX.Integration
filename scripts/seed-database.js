@@ -69,17 +69,6 @@ class DatabaseSeeder {
   async cleanDatabase() {
     console.log('🧹 Cleaning existing data...');
     
-    // Drop old collections that are no longer used
-    const db = this.userModel.db;
-    const collections = await db.listCollections().toArray();
-    
-    for (const collection of collections) {
-      if (collection.name === 'qr_invitations' || collection.name === 'onboarding_progresses') {
-        console.log(`🗑️  Dropping old collection: ${collection.name}`);
-        await db.dropCollection(collection.name);
-      }
-    }
-
     // Delete data from current collections
     await Promise.all([
       this.entityModel.deleteMany({}),
@@ -113,26 +102,7 @@ class DatabaseSeeder {
   }
 
   async seedEntities() {
-    const now = new Date();
-    const entitiesData = [
-      {
-        _id: SYSTEM_ENTITY_ID,
-        name: SYSTEM_ENTITY_NAME,
-        type: SYSTEM_ENTITY_TYPE,
-        parentId: null,
-        path: SYSTEM_ENTITY_NAME,
-        entityIdPath: [SYSTEM_ENTITY_ID],
-        level: 0,
-        isActive: true,
-        tenantId: null,
-        createdBy: 'system',
-        createdAt: now,
-        updatedAt: now,
-      }
-    ];
-    const entities = await this.entityModel.insertMany(entitiesData);
-    console.log(`✅ Created ${entities.length} entity (System Entity)`);
-    return entities;
+    return [];
   }
 
   async seedUsers() {

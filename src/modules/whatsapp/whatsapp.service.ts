@@ -9,6 +9,7 @@ import { WhatsAppSession, SessionStatus } from '../../common/schemas/whatsapp-se
 import { Message, MessageDirection, MessageStatus, MessageType } from '../../common/schemas/message.schema';
 import { Types } from 'mongoose';
 import * as os from 'os';
+import { EntitiesService } from '../entities/entities.service';
 
 @Injectable()
 export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
@@ -24,6 +25,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     @InjectModel(Message.name)
     private messageModel: Model<Message>,
     private configService: ConfigService,
+    private entityService: EntitiesService,
   ) {
     // Initialize Azure Blob Storage
     const connectionString = this.configService.get<string>('storage.azure.connectionString');
@@ -47,6 +49,16 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
   async createSession(sessionId: string, userId: Types.ObjectId, invitedBy: string, entityId: string, tenantId: string): Promise<WhatsAppSession> {
     this.logger.log(`Creating new WhatsApp session: ${sessionId}`);
 
+    // Get entity path before creating session
+    const entityObjectId = new Types.ObjectId(entityId);
+    const entity = await this.entityService.findOne(entityId, null);
+
+    console.log(entity);
+    
+    if (!entity.entityIdPath || entity.entityIdPath.length) {
+      this.logger.warn(`Failed to get entity path for entity: ${entityId}`);
+    }
+
     // Check if session already exists
     let session = await this.sessionModel.findOne({ sessionId });
     
@@ -55,11 +67,22 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         _id: new Types.ObjectId(),
         sessionId,
         userId,
-        entityId: new Types.ObjectId(entityId),
+        entityId: entityObjectId,
+        entityIdPath: entity.entityIdPath,
         tenantId: new Types.ObjectId(tenantId),
         status: SessionStatus.CONNECTING,
         createdBy: invitedBy,
       });
+    } else {
+      // Update existing session with entity path
+      session = await this.sessionModel.findOneAndUpdate(
+        { sessionId },
+        { 
+          entityIdPath: entity.entityIdPath,
+          lastActivityAt: new Date()
+        },
+        { new: true }
+      );
     }
 
     // Initialize WhatsApp client
@@ -206,6 +229,34 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       const session = await this.sessionModel.findOne({ sessionId });
       if (!session) return;
 
+      // Check if message already exists
+      const existingMessage = await this.messageModel.findOne({ 
+        whatsappMessageId: message.id._serialized 
+      });
+      
+      if (existingMessage) {
+        this.logger.debug(`Skipping duplicate message: ${message.id._serialized}`);
+        return;
+      }
+
+      // Get entity with path
+      const entity = await this.entityService.findOne(session.entityId.toString(), null);
+      if (!entity.entityIdPath || entity.entityIdPath.length === 0) {
+        this.logger.warn(`Failed to get entity path for entity: ${session.entityId}`);
+      }
+
+      // Check if message is a reply
+      let quotedMessage = null;
+      if (message.hasQuotedMsg) {
+        try {
+          // Get the quoted message
+          quotedMessage = await message.getQuotedMessage();
+          this.logger.log(`Reply detected - Original message: ${quotedMessage.id._serialized} from ${quotedMessage.from}`);
+        } catch (error) {
+          this.logger.warn(`Failed to fetch quoted message: ${error.message}`);
+        }
+      }
+
       let mediaUrl = null;
       if (message.hasMedia) {
         mediaUrl = await this.handleMediaUpload(message);
@@ -225,6 +276,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         deliveredAt: new Date(),
         conversationId: message.from,
         entityId: session.entityId,
+        entityIdPath: entity.entityIdPath,
         tenantId: session.tenantId,
         metadata: {
           hasMedia: message.hasMedia,
@@ -232,6 +284,11 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
           isStarred: message.isStarred,
           mediaType: message.type,
           caption: message.caption,
+          // Add reply metadata
+          isReply: message.hasQuotedMsg,
+          quotedMessageId: quotedMessage?.id?._serialized,
+          quotedMessageFrom: quotedMessage?.from,
+          quotedMessageBody: quotedMessage?.body,
         },
       };
 
@@ -257,6 +314,22 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       const session = await this.sessionModel.findOne({ sessionId });
       if (!session) return;
 
+      // Check if message already exists
+      const existingMessage = await this.messageModel.findOne({ 
+        whatsappMessageId: message.id._serialized 
+      });
+      
+      if (existingMessage) {
+        this.logger.debug(`Skipping duplicate message: ${message.id._serialized}`);
+        return;
+      }
+
+      // Get entity with path
+      const entity = await this.entityService.findOne(session.entityId.toString(), null);
+      if (!entity.entityIdPath || entity.entityIdPath.length === 0) {
+        this.logger.warn(`Failed to get entity path for entity: ${session.entityId}`);
+      }
+
       let mediaUrl = null;
       if (message.hasMedia) {
         mediaUrl = await this.handleMediaUpload(message);
@@ -275,6 +348,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         sentAt: new Date(message.timestamp * 1000),
         conversationId: message.to,
         entityId: session.entityId,
+        entityIdPath: entity.entityIdPath,
         tenantId: session.tenantId,
         metadata: {
           hasMedia: message.hasMedia,
@@ -430,6 +504,12 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         mediaUrl = blockBlobClient.url;
       }
 
+      // Get entity with path
+      const entity = await this.entityService.findOne(session.entityId.toString(), null);
+      if (!entity.entityIdPath || entity.entityIdPath.length === 0) {
+        this.logger.warn(`Failed to get entity path for entity: ${session.entityId}`);
+      }
+
       const messageData = await this.messageModel.create({
         whatsappMessageId: sentMessage.id._serialized,
         from: session.phoneNumber,
@@ -442,6 +522,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         sentAt: new Date(),
         conversationId: to,
         entityId: session.entityId,
+        entityIdPath: entity.entityIdPath,
         tenantId: session.tenantId,
         createdBy: userId,
         metadata: {
@@ -529,7 +610,11 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     const query: any = { isActive: true };
 
     if (filters?.tenantId) query.tenantId = new Types.ObjectId(filters.tenantId);
-    if (filters?.entityId) query.entityId = new Types.ObjectId(filters.entityId);
+    if (filters?.entityId) {
+      const entityId = new Types.ObjectId(filters.entityId);
+      // Check if the entity ID is in the entityIdPath array
+      query.entityIdPath = entityId;
+    }
     if (filters?.userId) query.userId = new Types.ObjectId(filters.userId);
     if (filters?.direction) query.direction = filters.direction;
     if (filters?.status) query.status = filters.status;
