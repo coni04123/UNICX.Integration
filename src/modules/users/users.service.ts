@@ -664,7 +664,6 @@ export class UsersService {
     try {
       // Disconnect existing session if any
       await this.whatsappService.disconnectSession(sessionId);
-      console.log("Yes Connect 1", user, user.entityId, user.tenantId);
       // Create new session
       await this.whatsappService.createSession(
         sessionId,
@@ -674,7 +673,6 @@ export class UsersService {
         user.tenantId.toString(),
       );
 
-      console.log("Yes Connect 2");
 
       // Update user status to connecting
       await this.updateWhatsAppConnectionStatus(
@@ -682,8 +680,6 @@ export class UsersService {
         WhatsAppConnectionStatus.CONNECTING,
         tenantId
       );
-
-      console.log("Yes Connect 3");
 
       // Try to get QR code with exponential backoff
       let qrCodeData = null;

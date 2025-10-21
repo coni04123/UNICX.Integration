@@ -99,6 +99,8 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
 
     let chromePath;
 
+    console.log(os.platform());
+
     if (os.platform() === "win32") {
       // Windows
       chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";

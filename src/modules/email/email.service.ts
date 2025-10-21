@@ -33,15 +33,24 @@ export class EmailService {
   ): Promise<void> {
     try {
       const template = await this.loadTemplate(templateId);
-      const html = template(templateData);
+      
+      // Ensure required template data is provided
+      const defaultTemplateData = {
+        companyName: 'UNICX',
+        loginUrl: process.env.FRONTEND_URL || 'https://localhost:3000/login',
+        supportEmail: this.configService.get<string>('email.from.address'),
+        ...templateData
+      };
+      
+      const html = template(defaultTemplateData);
 
-      const fromName = this.configService.get<string>('email.from.name');
+      const fromName = this.configService.get<string>('email.from.name') || 'UNICX';
       const fromAddress = this.configService.get<string>('email.from.address');
       
       const mailOptions = {
         from: `"${fromName}" <${fromAddress}>`,
         to: email,
-        subject: templateData.subject || 'Welcome to UNICX',
+        subject: templateData.subject || `Welcome to ${defaultTemplateData.companyName}`,
         html,
       };
 
@@ -76,12 +85,22 @@ export class EmailService {
     return { success, failed, errors };
   }
 
-  async sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
+  async sendPasswordResetEmail(email: string, resetToken: string, userData?: { firstName?: string; lastName?: string }): Promise<void> {
     try {
       const template = await this.loadTemplate('password-reset');
-      const html = template({ resetToken, email });
+      
+      // Ensure required template data is provided
+      const templateData = {
+        firstName: userData?.firstName || 'User',
+        lastName: userData?.lastName || '',
+        email: email,
+        resetLink: `${process.env.FRONTEND_URL || 'https://localhost:3000'}/reset-password?token=${resetToken}`,
+        companyName: 'UNICX'
+      };
+      
+      const html = template(templateData);
 
-      const fromName = this.configService.get<string>('email.from.name');
+      const fromName = this.configService.get<string>('email.from.name') || 'UNICX';
       const fromAddress = this.configService.get<string>('email.from.address');
       
       const mailOptions = {
@@ -102,15 +121,23 @@ export class EmailService {
   async sendWelcomeEmail(email: string, userData: Record<string, any>): Promise<void> {
     try {
       const template = await this.loadTemplate('welcome');
-      const html = template(userData);
+      
+      // Ensure required template data is provided
+      const templateData = {
+        companyName: 'UNICX',
+        dashboardUrl: process.env.FRONTEND_URL || 'https://localhost:3000/dashboard',
+        ...userData
+      };
+      
+      const html = template(templateData);
 
-      const fromName = this.configService.get<string>('email.from.name');
+      const fromName = this.configService.get<string>('email.from.name') || 'UNICX';
       const fromAddress = this.configService.get<string>('email.from.address');
       
       const mailOptions = {
         from: `"${fromName}" <${fromAddress}>`,
         to: email,
-        subject: 'Welcome to UNICX',
+        subject: `Welcome to ${templateData.companyName}`,
         html,
       };
 
@@ -159,83 +186,25 @@ export class EmailService {
     data: { firstName: string; lastName: string; qrCode: string; sessionId: string; tempPassword: string; expiresAt: Date }
   ): Promise<void> {
     try {
-      const fromName = this.configService.get<string>('email.from.name');
+      const fromName = this.configService.get<string>('email.from.name') || 'UNICX';
       const fromAddress = this.configService.get<string>('email.from.address');
 
-      const html = `
-        <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center; }
-              .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
-              .qr-container { text-align: center; margin: 30px 0; }
-              .qr-container img { max-width: 300px; border: 2px solid #667eea; padding: 10px; background: white; border-radius: 10px; }
-              .info-box { background: white; padding: 15px; border-left: 4px solid #667eea; margin: 15px 0; }
-              .warning-box { background: #fef3c7; padding: 15px; border-left: 4px solid #f59e0b; margin: 20px 0; }
-              .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; }
-              .steps { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; }
-              .steps ol { margin: 10px 0; padding-left: 20px; }
-              .steps li { margin: 8px 0; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1>🎉 Welcome to UNICX!</h1>
-              <p>Connect Your WhatsApp</p>
-            </div>
-            <div class="content">
-              <h2>Hello ${data.firstName} ${data.lastName},</h2>
-              <p>You've been invited to join UNICX. To get started, please connect your WhatsApp account by scanning the QR code below:</p>
-              
-              <div class="qr-container">
-                <img src="${data.qrCode}" alt="WhatsApp QR Code" />
-                <p><strong>Scan this QR code with WhatsApp</strong></p>
-              </div>
-
-              <div class="steps">
-                <strong>📱 How to scan:</strong>
-                <ol>
-                  <li>Open WhatsApp on your phone</li>
-                  <li>Tap <strong>Menu</strong> (⋮) or <strong>Settings</strong></li>
-                  <li>Tap <strong>Linked Devices</strong></li>
-                  <li>Tap <strong>Link a Device</strong></li>
-                  <li>Point your phone at this screen to scan the code</li>
-                </ol>
-              </div>
-
-              <div class="warning-box">
-                <strong>⏰ Important:</strong> This QR code expires in 60 seconds. If expired, please contact your administrator to generate a new one.
-              </div>
-
-              <div class="info-box">
-                <strong>Your Login Credentials:</strong><br>
-                <strong>Email:</strong> ${email}<br>
-                <strong>Temporary Password:</strong> ${data.tempPassword}<br>
-                <strong>Session ID:</strong> ${data.sessionId}<br><br>
-                <small style="color: #6b7280;">Please change your password after first login.</small>
-              </div>
-
-              <p><strong>After connecting, you'll be able to:</strong></p>
-              <ul>
-                <li>✅ Send and receive WhatsApp messages</li>
-                <li>✅ Connect with your team instantly</li>
-                <li>✅ Access the communication dashboard</li>
-                <li>✅ Track message delivery and read status</li>
-                <li>✅ Manage conversations efficiently</li>
-              </ul>
-
-              <p>If you need any assistance, please contact your administrator.</p>
-
-              <div class="footer">
-                <p><strong>UNICX Integration Platform</strong></p>
-                <p>This email was sent automatically. Please do not reply.</p>
-                <p>© 2025 UNICX. All rights reserved.</p>
-              </div>
-            </div>
-          </body>
-        </html>
-      `;
+      // Use the invitation template with QR code data
+      const template = await this.loadTemplate('invitation');
+      
+      const templateData = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: email,
+        tempPassword: data.tempPassword,
+        companyName: 'UNICX',
+        loginUrl: process.env.FRONTEND_URL || 'https://localhost:3000/login',
+        qrCodeImage: data.qrCode,
+        expiryHours: Math.ceil((data.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60)),
+        message: `Please scan the QR code below to connect your WhatsApp account. This code expires in ${Math.ceil((data.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60))} hours.`
+      };
+      
+      const html = template(templateData);
 
       const mailOptions = {
         from: `"${fromName}" <${fromAddress}>`,
