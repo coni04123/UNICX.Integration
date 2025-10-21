@@ -64,9 +64,6 @@ RUN npm ci --only=production
 # Copy built app from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/.env .env
-# Copy other static files if needed (e.g., public, views)
-COPY --from=builder /app/public ./public 2>/dev/null || true
-COPY --from=builder /app/views ./views 2>/dev/null || true
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
