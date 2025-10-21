@@ -6,7 +6,6 @@ import { Entity } from '../../common/schemas/entity.schema';
 import { AuthService } from '../auth/auth.service';
 import { EmailService } from '../email/email.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
-import { AuditService, AuditAction } from '../../common/audit/audit.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InviteUserDto } from './dto/invite-user.dto';
@@ -28,7 +27,6 @@ export class UsersService {
     private emailService: EmailService,
     @Inject(forwardRef(() => WhatsAppService))
     private whatsappService: WhatsAppService,
-    private auditService: AuditService,
   ) {}
 
   async create(createUserDto: CreateUserDto, createdBy: string): Promise<User> {
@@ -329,7 +327,7 @@ export class UsersService {
 
     const savedUser = await user.save();
 
-    // Declare qrCodeData at method level for audit logging
+    // Declare qrCodeData at method level
     let qrCodeData = null;
 
     // Create WhatsApp session and send QR code via email (only for users with phone numbers)
@@ -452,39 +450,6 @@ export class UsersService {
         this.logger.error(`Failed to send Tenant Admin invitation email: ${error.message}`, error);
         // Don't fail user creation if email fails
       }
-    }
-
-    // Log audit event
-    try {
-      await this.auditService.log(
-        invitedBy,
-        '', // userEmail will be filled by the audit service
-        tenantId,
-        AuditAction.INVITE,
-        'user',
-        savedUser._id.toString(),
-        undefined,
-        {
-          email: savedUser.email,
-          firstName: savedUser.firstName,
-          lastName: savedUser.lastName,
-          role: savedUser.role,
-          entityId: savedUser.entityId.toString(),
-          phoneNumber: savedUser.phoneNumber,
-        },
-        undefined, // ipAddress
-        undefined, // userAgent
-        undefined, // endpoint
-        undefined, // method
-        {
-          invitationType: role === UserRole.TENANT_ADMIN ? 'tenant_admin' : 'user',
-          tempPasswordGenerated: true,
-          emailSent: true,
-          qrCodeGenerated: role !== UserRole.TENANT_ADMIN && qrCodeData ? true : false,
-        }
-      );
-    } catch (auditError) {
-      this.logger.warn('Failed to log audit event for user invitation:', auditError);
     }
 
     return savedUser;

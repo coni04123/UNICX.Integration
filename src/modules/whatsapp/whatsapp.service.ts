@@ -3,21 +3,18 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import * as QRCode from 'qrcode';
-import { BlobServiceClient } from '@azure/storage-blob';
 import { ConfigService } from '@nestjs/config';
 import { WhatsAppSession, SessionStatus } from '../../common/schemas/whatsapp-session.schema';
 import { Message, MessageDirection, MessageStatus, MessageType } from '../../common/schemas/message.schema';
 import { Types } from 'mongoose';
 import * as os from 'os';
 import { EntitiesService } from '../entities/entities.service';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WhatsAppService.name);
   private clients: Map<string, Client> = new Map();
-
-  private blobServiceClient: BlobServiceClient;
-  private containerClient: any;
 
   constructor(
     @InjectModel(WhatsAppSession.name)
@@ -26,12 +23,8 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     private messageModel: Model<Message>,
     private configService: ConfigService,
     private entityService: EntitiesService,
-  ) {
-    // Initialize Azure Blob Storage
-    const connectionString = this.configService.get<string>('storage.azure.connectionString');
-    this.blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-    this.containerClient = this.blobServiceClient.getContainerClient('whatsapp-media');
-  }
+    private storageService: StorageService,
+  ) {}
 
   async onModuleInit() {
     this.logger.log('WhatsApp Service initialized');
@@ -385,21 +378,21 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
 
       const { data, mimetype, filename } = media;
       const extension = mimetype.split('/')[1];
-      const blobName = `${message.id._serialized}.${extension}`;
-      const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
+      const fileName = `${message.id._serialized}.${extension}`;
 
       // Convert base64 to buffer
       const buffer = Buffer.from(data, 'base64');
 
-      // Upload to Azure Blob Storage
-      await blockBlobClient.upload(buffer, buffer.length, {
-        blobHTTPHeaders: {
-          blobContentType: mimetype,
-        },
-      });
+      // Upload to cloud storage using StorageService
+      const uploadResult = await this.storageService.uploadFile(
+        buffer,
+        fileName,
+        mimetype,
+        'whatsapp-media',
+      );
 
-      // Return the URL
-      return blockBlobClient.url;
+      this.logger.log(`Media uploaded to cloud storage: ${uploadResult.url}`);
+      return uploadResult.url;
     } catch (error) {
       this.logger.error(`Failed to upload media: ${error.message}`, error);
       return null;
@@ -461,6 +454,69 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     return typeMap[type] || MessageType.TEXT;
   }
 
+  async sendMediaMessage(
+    sessionId: string,
+    to: string,
+    message: string,
+    mediaBuffer: Buffer,
+    contentType: string,
+    mediaType: 'image' | 'video' | 'audio' | 'document',
+    userId: string,
+  ): Promise<Message> {
+    const client = this.clients.get(sessionId);
+    if (!client) {
+      throw new Error(`No active client for session: ${sessionId}`);
+    }
+
+    const session = await this.sessionModel.findOne({ sessionId });
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    try {
+      // Create MessageMedia from buffer
+      const media = new MessageMedia(contentType, mediaBuffer.toString('base64'));
+      
+      // Send message with media
+      const sentMessage = await client.sendMessage(to, media, { caption: message });
+      
+      // Get entity with path
+      const entity = await this.entityService.findOne(session.entityId.toString(), null);
+      if (!entity.entityIdPath || entity.entityIdPath.length === 0) {
+        this.logger.warn(`Failed to get entity path for entity: ${session.entityId}`);
+      }
+
+      // Create message record
+      const messageData = await this.messageModel.create({
+        whatsappMessageId: sentMessage.id._serialized,
+        sessionId: session._id,
+        entityId: session.entityId,
+        entityIdPath: entity.entityIdPath || [],
+        direction: MessageDirection.OUTBOUND,
+        from: session.phoneNumber,
+        to: to,
+        content: message,
+        messageType: this.getMessageType(mediaType),
+        status: MessageStatus.SENT,
+        mediaUrl: null, // Will be set by storage service
+        metadata: {
+          mediaType,
+          contentType,
+          size: mediaBuffer.length,
+        },
+        timestamp: new Date(),
+        userId: new Types.ObjectId(userId),
+        tenantId: session.tenantId,
+      });
+
+      this.logger.log(`Media message sent successfully: ${sentMessage.id._serialized}`);
+      return messageData;
+    } catch (error) {
+      this.logger.error(`Failed to send media message: ${error.message}`);
+      throw error;
+    }
+  }
+
   async sendMessage(
     sessionId: string, 
     to: string, 
@@ -491,19 +547,19 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         sentMessage = await client.sendMessage(to, content, { caption: options.caption });
         messageType = this.getMessageType(content.mimetype.split('/')[0]);
         
-        // Upload media to Azure Blob Storage
+        // Upload media to cloud storage using StorageService
         const extension = content.mimetype.split('/')[1];
-        const blobName = `${sentMessage.id._serialized}.${extension}`;
-        const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
+        const fileName = `${sentMessage.id._serialized}.${extension}`;
         
         const buffer = Buffer.from(content.data, 'base64');
-        await blockBlobClient.upload(buffer, buffer.length, {
-          blobHTTPHeaders: {
-            blobContentType: content.mimetype,
-          },
-        });
+        const uploadResult = await this.storageService.uploadFile(
+          buffer,
+          fileName,
+          content.mimetype,
+          'whatsapp-media',
+        );
         
-        mediaUrl = blockBlobClient.url;
+        mediaUrl = uploadResult.url;
       }
 
       // Get entity with path

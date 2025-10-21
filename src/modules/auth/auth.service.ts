@@ -4,7 +4,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, UserRole } from '../../common/schemas/user.schema';
 import { Entity } from '../../common/schemas/entity.schema';
-import { AuditService, AuditAction } from '../../common/audit/audit.service';
 import { RegisterDto } from './dto/register.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -42,7 +41,6 @@ export class AuthService {
     @InjectModel(Entity.name)
     private entityModel: Model<Entity>,
     private jwtService: JwtService,
-    private auditService: AuditService,
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
@@ -73,35 +71,6 @@ export class AuthService {
       secret: process.env.JWT_REFRESH_SECRET,
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     });
-
-    // Log audit event for login
-    try {
-      await this.auditService.log(
-        user._id.toString(),
-        user.email,
-        user?.tenantId?.toString() || '',
-        AuditAction.LOGIN,
-        'auth',
-        user._id.toString(),
-        undefined,
-        {
-          role: user.role,
-          entityId: user?.entityId?.toString(),
-          loginTime: new Date().toISOString(),
-        },
-        undefined, // ipAddress
-        undefined, // userAgent
-        undefined, // endpoint
-        undefined, // method
-        {
-          loginMethod: 'email_password',
-          sessionCreated: true,
-        }
-      );
-    } catch (auditError) {
-      // Don't fail login if audit logging fails
-      console.warn('Failed to log audit event for login:', auditError);
-    }
 
     return {
       access_token,

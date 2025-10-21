@@ -5,7 +5,6 @@ import { DashboardController } from './dashboard.controller';
 import { UsersModule } from '../users/users.module';
 import { EntitiesModule } from '../entities/entities.module';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
-import { AuditModule } from '../audit/audit.module';
 import { User, UserSchema } from '../../common/schemas/user.schema';
 import { Entity, EntitySchema } from '../../common/schemas/entity.schema';
 import { Message, MessageSchema } from '../../common/schemas/message.schema';
@@ -22,7 +21,6 @@ import { WhatsAppSession, WhatsAppSessionSchema } from '../../common/schemas/wha
     UsersModule,
     EntitiesModule,
     WhatsAppModule,
-    AuditModule,
   ],
   providers: [DashboardService],
   controllers: [DashboardController],

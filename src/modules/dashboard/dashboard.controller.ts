@@ -32,27 +32,6 @@ export class DashboardController {
     }
   }
 
-  @Get('recent-activity')
-  @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
-  async getRecentActivity(
-    @Req() req: Request,
-    @Query('limit') limit?: string,
-  ) {
-    try {
-      const tenantId = req.user['tenantId'];
-      const limitNum = limit ? parseInt(limit, 10) : 10;
-      const activity = await this.dashboardService.getRecentActivity(tenantId, limitNum);
-      
-      return {
-        success: true,
-        data: activity,
-      };
-    } catch (error) {
-      this.logger.error('Failed to get recent activity:', error);
-      throw error;
-    }
-  }
-
   @Get('system-health')
   @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
   async getSystemHealth(@Req() req: Request) {

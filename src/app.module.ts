@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { BullModule } from '@nestjs/bull';
 import { ScheduleModule } from '@nestjs/schedule';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -18,12 +17,11 @@ import { UsersModule } from './modules/users/users.module';
 import { UserManagementModule } from './modules/user-management/user-management.module';
 import { EmailModule } from './modules/email/email.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
-import { AuditModule } from './modules/audit/audit.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { StorageModule } from './modules/storage/storage.module';
 
 // Common
 import { DatabaseModule } from './common/database/database.module';
-import { QueueModule } from './common/queue/queue.module';
 import { SecurityModule } from './common/security/security.module';
 import { HealthModule } from './common/health/health.module';
 
@@ -57,18 +55,6 @@ import { HealthModule } from './common/health/health.module';
       inject: [ConfigService],
     }),
 
-    // Queue management
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        redis: {
-          host: configService.get<string>('redis.host'),
-          port: configService.get<number>('redis.port'),
-          password: configService.get<string>('redis.password'),
-        },
-      }),
-      inject: [ConfigService],
-    }),
 
     // Scheduling
     ScheduleModule.forRoot(),
@@ -90,7 +76,6 @@ import { HealthModule } from './common/health/health.module';
 
     // Common modules
     DatabaseModule,
-    QueueModule,
     SecurityModule,
     HealthModule,
 
@@ -101,8 +86,8 @@ import { HealthModule } from './common/health/health.module';
     UserManagementModule,
     EmailModule,
     WhatsAppModule,
-    AuditModule,
     DashboardModule,
+    StorageModule,
   ],
 })
 export class AppModule {}

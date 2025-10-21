@@ -3,7 +3,6 @@ import { DatabaseModule } from '../../common/database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../email/email.module';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
-import { AuditModule } from '../audit/audit.module';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 
@@ -13,7 +12,6 @@ import { UsersController } from './users.controller';
     AuthModule, 
     EmailModule,
     forwardRef(() => WhatsAppModule),
-    AuditModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],

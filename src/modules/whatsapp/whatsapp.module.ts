@@ -6,6 +6,7 @@ import { WhatsAppSession, WhatsAppSessionSchema } from '../../common/schemas/wha
 import { Message, MessageSchema } from '../../common/schemas/message.schema';
 import { UsersModule } from '../users/users.module';
 import { EntitiesModule } from '../entities/entities.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { EntitiesModule } from '../entities/entities.module';
     ]),
     forwardRef(() => UsersModule),
     forwardRef(() => EntitiesModule),
+    StorageModule,
   ],
   controllers: [WhatsAppController],
   providers: [WhatsAppService],

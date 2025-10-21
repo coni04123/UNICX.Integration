@@ -4,7 +4,6 @@ import { Model } from 'mongoose';
 import { UsersService } from '../users/users.service';
 import { EntitiesService } from '../entities/entities.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
-import { AuditService } from '../../common/audit/audit.service';
 import { User } from '../../common/schemas/user.schema';
 import { Entity } from '../../common/schemas/entity.schema';
 import { Message } from '../../common/schemas/message.schema';
@@ -22,7 +21,6 @@ export class DashboardService {
     private usersService: UsersService,
     private entitiesService: EntitiesService,
     private whatsappService: WhatsAppService,
-    private auditService: AuditService,
   ) {}
 
   async getDashboardStats(tenantId: string) {
@@ -191,28 +189,6 @@ export class DashboardService {
         type: change >= 0 ? 'increase' : 'decrease',
       },
     };
-  }
-
-  async getRecentActivity(tenantId: string, limit: number = 10) {
-    try {
-      const auditLogs = await this.auditService.getAuditLogs(tenantId, {
-        limit,
-        offset: 0,
-      });
-
-      return auditLogs.logs.map(log => ({
-        id: (log as any)._id?.toString(),
-        action: log.action,
-        resource: log.resource,
-        resourceId: log.resourceId,
-        userEmail: log.userEmail,
-        timestamp: log.createdAt,
-        metadata: log.metadata,
-      }));
-    } catch (error) {
-      this.logger.error('Failed to get recent activity:', error);
-      throw error;
-    }
   }
 
   async getSystemHealth(tenantId: string) {

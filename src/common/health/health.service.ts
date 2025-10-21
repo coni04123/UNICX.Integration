@@ -10,7 +10,6 @@ export interface HealthCheckResult {
   services: {
     database: ServiceHealth;
     email: ServiceHealth;
-    redis: ServiceHealth;
     memory: ServiceHealth;
   };
   uptime: number;
@@ -51,17 +50,15 @@ export class HealthService {
   }
 
   private async checkAllServices(): Promise<HealthCheckResult['services']> {
-    const [database, email, redis, memory] = await Promise.allSettled([
+    const [database, email, memory] = await Promise.allSettled([
       this.checkDatabase(),
       this.checkEmail(),
-      this.checkRedis(),
       this.checkMemory(),
     ]);
 
     return {
       database: database.status === 'fulfilled' ? database.value : { status: 'unhealthy', error: 'Database check failed' },
       email: email.status === 'fulfilled' ? email.value : { status: 'unhealthy', error: 'Email check failed' },
-      redis: redis.status === 'fulfilled' ? redis.value : { status: 'unhealthy', error: 'Redis check failed' },
       memory: memory.status === 'fulfilled' ? memory.value : { status: 'unhealthy', error: 'Memory check failed' },
     };
   }
@@ -114,29 +111,6 @@ export class HealthService {
     }
   }
 
-  private async checkRedis(): Promise<ServiceHealth> {
-    const startTime = Date.now();
-    try {
-      // This would need Redis client implementation
-      // For now, we'll simulate the check
-      const responseTime = Date.now() - startTime;
-
-      return {
-        status: 'healthy',
-        responseTime,
-        details: {
-          host: this.configService.get<string>('redis.host'),
-          port: this.configService.get<number>('redis.port'),
-        },
-      };
-    } catch (error) {
-      return {
-        status: 'unhealthy',
-        responseTime: Date.now() - startTime,
-        error: error.message,
-      };
-    }
-  }
 
   private async checkMemory(): Promise<ServiceHealth> {
     const startTime = Date.now();

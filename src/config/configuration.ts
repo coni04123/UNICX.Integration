@@ -10,7 +10,6 @@ export const configuration = () => ({
   // Database
   database: {
     mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/unicx-integration',
-    cosmosConnectionString: process.env.COSMOS_DB_CONNECTION_STRING || '',
     cosmosDbName: process.env.COSMOS_DB_NAME || 'unicx-integration',
     maxPoolSize: parseInt(process.env.DATABASE_MAX_POOL_SIZE, 10) || 50,
     minPoolSize: parseInt(process.env.DATABASE_MIN_POOL_SIZE, 10) || 10,
@@ -24,15 +23,6 @@ export const configuration = () => ({
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
 
-  // Redis Cache & Queue
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
-    password: process.env.REDIS_PASSWORD || '',
-    db: parseInt(process.env.REDIS_DB, 10) || 0,
-    ttl: parseInt(process.env.REDIS_TTL, 10) || 3600,
-  },
-
   // Email Configuration
   email: {
     provider: process.env.EMAIL_PROVIDER || 'smtp',
@@ -42,9 +32,6 @@ export const configuration = () => ({
       secure: process.env.EMAIL_SECURE === 'true',
       user: process.env.EMAIL_USER || '',
       pass: process.env.EMAIL_PASS || '',
-    },
-    sendgrid: {
-      apiKey: process.env.SENDGRID_API_KEY || '',
     },
     from: {
       name: process.env.EMAIL_FROM_NAME || 'UNICX',
@@ -115,7 +102,6 @@ export const configuration = () => ({
 
   // Cleanup Jobs
   cleanup: {
-    auditLogRetentionDays: parseInt(process.env.AUDIT_LOG_RETENTION_DAYS, 10) || 90,
     qrCodeCleanupDays: parseInt(process.env.QR_CODE_CLEANUP_DAYS, 10) || 7,
     failedInvitationCleanupDays: parseInt(process.env.FAILED_INVITATION_CLEANUP_DAYS, 10) || 14,
   },
