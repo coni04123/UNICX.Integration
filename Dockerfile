@@ -22,12 +22,24 @@ ENV AZURE_STORAGE_CONNECTION_STRING=$AZURE_STORAGE_CONNECTION_STRING
 # Install dependencies for native modules
 RUN apk add --no-cache python3 make g++
 
-# Install Chromium
-RUN apt-get update && apt-get install -y \
+# Install Chromium and build dependencies
+RUN apk add --no-cache \
     chromium \
-    chromium-driver \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    fontconfig \
+    bash \
+    python3 \
+    make \
+    g++ \
+    chromium-chromedriver
+
+# Set environment variables for Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    CHROME_BIN=/usr/bin/chromium-browser
 
 # Copy package files
 COPY package*.json ./
