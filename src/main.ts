@@ -59,12 +59,6 @@ async function bootstrap() {
   console.log(`🚀 ${appName} is running on: http://localhost:${port}`);
   console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
   console.log(`🏥 Health Check: http://localhost:${port}/health`);
-  console.log(`Database URI: ${configService.get<string>('database.mongodbUri')}`);
-  console.log(`Email Provider: ${configService.get<string>('email.provider')}`);
-  console.log(`Email Host: ${configService.get<string>('email.smtp.host')}`);
-  console.log(`Email Port: ${configService.get<number>('email.smtp.port')}`);
-  console.log(`Email Secure: ${configService.get<boolean>('email.smtp.secure')}`);
-  console.log(`🔐 JWT Secret: ${configService.get<string>('jwt.secret')}`);
   console.log(`🔐 Environment: ${configService.get<string>('app.nodeEnv')}`);
 }
 

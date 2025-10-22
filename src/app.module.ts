@@ -37,11 +37,15 @@ import { HealthModule } from './common/health/health.module';
     // Database
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('database.mongodbUri'),
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const mongoUri = configService.get<string>('database.mongodbUri');
+        console.log('Connecting to MongoDB at:', mongoUri); // ✅ log here
+        return {
+          uri: configService.get<string>('database.mongodbUri'),
+          useNewUrlParser: true,
+          useUnifiedTopology: true,
+        }
+      },
       inject: [ConfigService],
     }),
 
