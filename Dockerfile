@@ -3,7 +3,6 @@
 # =========================
 FROM node:22-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
 # Install build dependencies
@@ -24,7 +23,7 @@ RUN apk add --no-cache \
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     CHROME_BIN=/usr/bin/chromium
 
-# Copy package.json & lock
+# Copy package.json & lock files
 COPY package*.json ./
 
 # Install dependencies
@@ -33,25 +32,50 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Copy env file for build if needed
+# Copy environment file for build
 COPY .env.production .env
 
 # Build NestJS app
 RUN npm run build
 
+
 # =========================
-# Stage 2: Production image
+# Stage 2: Production
 # =========================
 FROM node:22-alpine
 
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont fontconfig bash wget
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    fontconfig \
+    bash \
+    wget
 
+# Puppeteer environment
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     CHROME_BIN=/usr/bin/chromium \
     PATH=/usr/local/bin:$PATH
+
+ARG MONGODB_URI
+ARG JWT_SECRET
+ARG EMAIL_USER
+ARG EMAIL_PASS
+ARG ENCRYPTION_KEY
+ARG AZURE_STORAGE_CONNECTION_STRING
+
+ENV MONGODB_URI=${MONGODB_URI}
+ENV JWT_SECRET=${JWT_SECRET}
+ENV EMAIL_USER=${EMAIL_USER}
+ENV EMAIL_PASS=${EMAIL_PASS}
+ENV ENCRYPTION_KEY=${ENCRYPTION_KEY}
+ENV AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
 
 # Copy package.json & lock
 COPY package*.json ./
@@ -59,19 +83,12 @@ COPY package*.json ./
 # Install only production dependencies
 RUN npm ci --only=production
 
-# Copy built app from builder
+# Copy built app
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/.env .env
 
-# Ensure files are readable by non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nestjs -u 1001 -G nodejs && \
-    chown -R nestjs:nodejs /app
-
-USER nestjs
-
-# Expose port
+# Expose app port
 EXPOSE 5000
 
-# Start the app
+# Run as root (admin privileges inside container)
 CMD ["sh", "-c", "npm run start:prod"]
