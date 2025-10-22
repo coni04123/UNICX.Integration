@@ -22,12 +22,12 @@ RUN apk add --no-cache \
 
 # Puppeteer env
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    CHROME_BIN=/usr/bin/chromium-browser
+    CHROME_BIN=/usr/bin/chromium
 
 # Copy package.json & lock
 COPY package*.json ./
 
-# Install all dependencies (including devDependencies for build)
+# Install dependencies
 RUN npm ci
 
 # Copy source code
@@ -39,9 +39,6 @@ COPY .env.production .env
 # Build NestJS app
 RUN npm run build
 
-# Optional: seed DB in builder (can also do in final if needed)
-# RUN npm run seed:clean
-
 # =========================
 # Stage 2: Production image
 # =========================
@@ -49,26 +46,14 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Install only runtime deps
-RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont fontconfig bash
+# Install runtime dependencies
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont fontconfig bash wget
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    CHROME_BIN=/usr/bin/chromium-browser
+    CHROME_BIN=/usr/bin/chromium \
+    PATH=/usr/local/bin:$PATH
 
-ARG MONGODB_URI
-ARG JWT_SECRET
-ARG EMAIL_USER
-ARG EMAIL_PASS
-ARG ENCRYPTION_KEY
-ARG AZURE_STORAGE_CONNECTION_STRING
-
-ENV MONGODB_URI=$MONGODB_URI
-ENV JWT_SECRET=$JWT_SECRET
-ENV EMAIL_USER=$EMAIL_PASS
-ENV ENCRYPTION_KEY=$ENCRYPTION_KEY
-ENV AZURE_STORAGE_CONNECTION_STRING=$AZURE_STORAGE_CONNECTION_STRING
-
-# Copy package.json & package-lock.json
+# Copy package.json & lock
 COPY package*.json ./
 
 # Install only production dependencies
@@ -78,19 +63,15 @@ RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/.env .env
 
-# Create non-root user
+# Ensure files are readable by non-root user
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nestjs -u 1001 -G nodejs
+    adduser -S nestjs -u 1001 -G nodejs && \
+    chown -R nestjs:nodejs /app
 
-RUN chown -R nestjs:nodejs /app
 USER nestjs
 
 # Expose port
 EXPOSE 5000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:5000/health || exit 1
-
 # Start the app
-CMD ["npm", "run", "start:prod"]
+CMD ["sh", "-c", "npm run start:prod"]

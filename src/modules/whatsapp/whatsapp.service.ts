@@ -6,6 +6,7 @@ import * as QRCode from 'qrcode';
 import { ConfigService } from '@nestjs/config';
 import { WhatsAppSession, SessionStatus } from '../../common/schemas/whatsapp-session.schema';
 import { Message, MessageDirection, MessageStatus, MessageType } from '../../common/schemas/message.schema';
+import { User } from '../../common/schemas/user.schema';
 import { Types } from 'mongoose';
 import * as os from 'os';
 import { EntitiesService } from '../entities/entities.service';
@@ -21,6 +22,8 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     private sessionModel: Model<WhatsAppSession>,
     @InjectModel(Message.name)
     private messageModel: Model<Message>,
+    @InjectModel(User.name)
+    private userModel: Model<User>,
     private configService: ConfigService,
     private entityService: EntitiesService,
     private storageService: StorageService,
@@ -257,6 +260,17 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         mediaUrl = await this.handleMediaUpload(message);
       }
 
+      // Check if sender is a registered user (external number detection)
+      const cleanedPhoneNumber = this.cleanPhoneNumber(message.from);
+      const registeredUser = await this.checkIfRegisteredUser(cleanedPhoneNumber, session.tenantId);
+      const contactInfo = await this.getContactInfo(message);
+      
+      const isExternalNumber = !registeredUser;
+      const externalSenderName = isExternalNumber ? contactInfo.name : null;
+      const externalSenderPhone = isExternalNumber ? cleanedPhoneNumber : null;
+
+      this.logger.log(`Message from ${cleanedPhoneNumber}: ${isExternalNumber ? 'EXTERNAL' : 'REGISTERED'} - ${contactInfo.name}`);
+
       const messageData = {
         _id: new Types.ObjectId(),
         whatsappMessageId: message.id._serialized,
@@ -273,6 +287,11 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         entityId: session.entityId,
         entityIdPath: entity.entityIdPath,
         tenantId: session.tenantId,
+        // External number detection fields
+        isExternalNumber,
+        externalSenderName,
+        externalSenderPhone,
+        userId: registeredUser ? registeredUser._id : null,
         metadata: {
           hasMedia: message.hasMedia,
           isForwarded: message.isForwarded,
@@ -284,6 +303,16 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
           quotedMessageId: quotedMessage?.id?._serialized,
           quotedMessageFrom: quotedMessage?.from,
           quotedMessageBody: quotedMessage?.body,
+          // External number metadata
+          senderContactName: contactInfo.name,
+          senderContactPhone: contactInfo.phone,
+          isExternalSender: isExternalNumber,
+          registeredUserInfo: registeredUser ? {
+            firstName: registeredUser.firstName,
+            lastName: registeredUser.lastName,
+            email: registeredUser.email,
+            role: registeredUser.role
+          } : null,
         },
       };
 
@@ -680,6 +709,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     if (filters?.from) query.from = { $regex: filters.from, $options: 'i' };
     if (filters?.to) query.to = { $regex: filters.to, $options: 'i' };
     if (filters?.conversationId) query.conversationId = filters.conversationId;
+    if (filters?.isExternal !== undefined) query.isExternalNumber = filters.isExternal === 'true';
 
     if (filters?.search) {
       query.content = { $regex: filters.search, $options: 'i' };
@@ -746,6 +776,73 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
     ]);
 
     return conversations;
+  }
+
+  /**
+   * Check if a phone number belongs to a registered user
+   * @param phoneNumber E164 formatted phone number
+   * @param tenantId Tenant ID to check within
+   * @returns User document if registered, null if external
+   */
+  private async checkIfRegisteredUser(phoneNumber: string, tenantId: Types.ObjectId): Promise<any> {
+    try {
+      // Find user by phone number within the tenant
+      const user = await this.userModel.findOne({
+        phoneNumber: phoneNumber,
+        tenantId: tenantId,
+        isActive: true,
+        registrationStatus: { $in: ['registered', 'invited'] }
+      }).select('firstName lastName email phoneNumber role');
+
+      return user;
+    } catch (error) {
+      this.logger.error(`Error checking registered user for ${phoneNumber}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Extract contact information from WhatsApp message
+   * @param message WhatsApp message object
+   * @returns Contact info object
+   */
+  private async getContactInfo(message: any): Promise<{ name: string; phone: string }> {
+    try {
+      // Try to get contact info from WhatsApp
+      const contact = await message.getContact();
+      const name = contact.pushname || contact.name || contact.shortName || '';
+      const phone = contact.number || message.from;
+      
+      return {
+        name: name.trim() || 'Unknown',
+        phone: phone
+      };
+    } catch (error) {
+      this.logger.warn(`Failed to get contact info for ${message.from}:`, error);
+      return {
+        name: 'Unknown',
+        phone: message.from
+      };
+    }
+  }
+
+  /**
+   * Clean and format phone number to E164 format
+   * @param phoneNumber Raw phone number
+   * @returns Cleaned E164 phone number
+   */
+  private cleanPhoneNumber(phoneNumber: string): string {
+    // Remove any non-digit characters except +
+    let cleaned = phoneNumber.replace(/[^\d+]/g, '');
+    
+    // If it doesn't start with +, assume it needs country code
+    if (!cleaned.startsWith('+')) {
+      // This is a simplified approach - in production you might want to use a library like libphonenumber
+      // For now, we'll just return the original number
+      cleaned = '+' + cleaned;
+    }
+    
+    return cleaned;
   }
 }
 

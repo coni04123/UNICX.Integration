@@ -108,6 +108,16 @@ export class Message {
   @Prop({ type: Types.ObjectId, ref: 'Entity', required: true })
   tenantId: Types.ObjectId;
 
+  // External Number Detection
+  @Prop({ default: false })
+  isExternalNumber: boolean; // True if sender is not a registered user
+
+  @Prop({ type: String })
+  externalSenderName: string; // Display name for external senders (from WhatsApp contact info)
+
+  @Prop({ type: String })
+  externalSenderPhone: string; // Cleaned phone number for external senders
+
   // Flags
   @Prop({ default: false })
   isStarred: boolean;
@@ -147,4 +157,6 @@ MessageSchema.index({ direction: 1, tenantId: 1 });
 MessageSchema.index({ type: 1, tenantId: 1 });
 MessageSchema.index({ createdAt: -1 });
 MessageSchema.index({ sentAt: -1 });
+MessageSchema.index({ isExternalNumber: 1, tenantId: 1 });
+MessageSchema.index({ externalSenderPhone: 1 });
 

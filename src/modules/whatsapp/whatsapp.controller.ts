@@ -104,10 +104,33 @@ export class WhatsAppController {
   @ApiQuery({ name: 'search', required: false, description: 'Search in message content' })
   @ApiQuery({ name: 'startDate', required: false, description: 'Start date filter' })
   @ApiQuery({ name: 'endDate', required: false, description: 'End date filter' })
+  @ApiQuery({ name: 'isExternal', required: false, description: 'Filter by external numbers (true/false)' })
   @ApiResponse({ status: 200, description: 'Messages retrieved successfully with pagination' })
   async getMessages(@Query() query: any, @Request() req) {
     const filters = {
       ...query,
+    };
+
+    if (query.entityId || req.user.entityId !== SYSTEM_ENTITY_ID.toString()) {
+      filters.entityId = query.entityId || req.user.entityId;
+    }
+
+    return this.whatsappService.getMessages(filters);
+  }
+
+  @Get('messages/external')
+  @RequireTenant()
+  @ApiOperation({ summary: 'Get messages from external (unregistered) numbers only' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiQuery({ name: 'search', required: false, description: 'Search in message content' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Start date filter' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'End date filter' })
+  @ApiResponse({ status: 200, description: 'External messages retrieved successfully' })
+  async getExternalMessages(@Query() query: any, @Request() req) {
+    const filters = {
+      ...query,
+      isExternal: 'true', // Force external filter
     };
 
     if (query.entityId || req.user.entityId !== SYSTEM_ENTITY_ID.toString()) {
