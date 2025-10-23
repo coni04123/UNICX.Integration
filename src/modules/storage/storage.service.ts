@@ -46,7 +46,7 @@ export class StorageService {
     }
 
     try {
-      this.azureClient = new BlobServiceClient(connectionString);
+      this.azureClient = BlobServiceClient.fromConnectionString(connectionString);
       this.azureContainer = this.azureClient.getContainerClient(containerName);
       this.logger.log(`Azure Blob Storage initialized with container: ${containerName}`);
     } catch (error) {
