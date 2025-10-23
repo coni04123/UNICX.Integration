@@ -19,7 +19,7 @@ export class EmailService {
         user: this.configService.get<string>('email.smtp.user'),
         pass: this.configService.get<string>('email.smtp.pass'),
       },
-    }; 
+    };
 
     this.logger.log(`Initializing email service with host: ${emailConfig.host}:${emailConfig.port}`);
     
@@ -151,7 +151,7 @@ export class EmailService {
 
   private async loadTemplate(templateId: string): Promise<handlebars.TemplateDelegate> {
     try {
-      const templatePath = path.join(__dirname, '..', '..', 'templates', `${templateId}.hbs`);
+      const templatePath = path.join(__dirname, '..', '..', '..', 'templates', `${templateId}.hbs`);
       const templateContent = fs.readFileSync(templatePath, 'utf8');
       return handlebars.compile(templateContent);
     } catch (error) {
