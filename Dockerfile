@@ -85,6 +85,7 @@ RUN npm ci --only=production
 
 # Copy built app
 COPY --from=builder /app/dist ./dist
+COPY scripts ./scripts
 COPY --from=builder /app/.env .env
 
 # Expose app port
