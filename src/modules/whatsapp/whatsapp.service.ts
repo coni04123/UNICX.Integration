@@ -421,7 +421,8 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       );
 
       this.logger.log(`Media uploaded to cloud storage: ${uploadResult.url}`);
-      return uploadResult.url;
+      // Return proxy URL instead of direct cloud storage URL
+      return uploadResult.proxyUrl;
     } catch (error) {
       this.logger.error(`Failed to upload media: ${error.message}`, error);
       return null;
@@ -588,7 +589,7 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
           'whatsapp-media',
         );
         
-        mediaUrl = uploadResult.url;
+        mediaUrl = uploadResult.proxyUrl;
       }
 
       // Get entity with path
@@ -737,8 +738,18 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       .skip(skip)
       .limit(limit);
 
+    // Enhance messages with external tag information
+    const enhancedMessages = messages.map(msg => ({
+      ...msg.toObject(),
+      // Add external tag for frontend
+      tags: msg.isExternalNumber ? ['External'] : [],
+      // Add display information
+      displayName: msg.externalSenderName || msg.metadata?.senderContactName || 'Unknown',
+      displayPhone: msg.externalSenderPhone || msg.from,
+    }));
+
     return {
-      messages: messages as any,
+      messages: enhancedMessages as any,
       total,
       page,
       limit,
@@ -770,12 +781,33 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
               ],
             },
           },
+          // Add external number detection
+          isExternalNumber: { $last: '$isExternalNumber' },
+          externalSenderName: { $last: '$externalSenderName' },
+          externalSenderPhone: { $last: '$externalSenderPhone' },
+          // Get contact info from the most recent message
+          contactName: { $last: '$metadata.senderContactName' },
+          contactPhone: { $last: '$metadata.senderContactPhone' },
         },
       },
       { $sort: { lastMessageAt: -1 } },
     ]);
 
-    return conversations;
+    // Enhance conversation data with external tag information
+    const enhancedConversations = conversations.map(conv => ({
+      ...conv,
+      conversationId: conv._id,
+      // Determine if this conversation is with an external number
+      isExternal: conv.isExternalNumber || false,
+      // Get display name - prefer external sender name, fallback to contact name
+      displayName: conv.externalSenderName || conv.contactName || 'Unknown',
+      // Get display phone
+      displayPhone: conv.externalSenderPhone || conv.contactPhone || conv._id,
+      // Add external tag for frontend
+      tags: conv.isExternalNumber ? ['External'] : [],
+    }));
+
+    return enhancedConversations;
   }
 
   /**

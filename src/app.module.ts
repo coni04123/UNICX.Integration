@@ -24,6 +24,8 @@ import { StorageModule } from './modules/storage/storage.module';
 import { DatabaseModule } from './common/database/database.module';
 import { SecurityModule } from './common/security/security.module';
 import { HealthModule } from './common/health/health.module';
+import { AuditModule } from './common/modules/audit.module';
+import { MetricsModule } from './common/modules/metrics.module';
 
 @Module({
   imports: [
@@ -82,6 +84,8 @@ import { HealthModule } from './common/health/health.module';
     DatabaseModule,
     SecurityModule,
     HealthModule,
+    AuditModule,
+    MetricsModule,
 
     // Feature modules
     AuthModule,

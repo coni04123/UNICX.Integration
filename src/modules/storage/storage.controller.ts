@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Param, Body, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, Body, UseGuards, UseInterceptors, UploadedFile, BadRequestException, Res, StreamableFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { StorageService, StorageUploadResult } from './storage.service';
@@ -106,5 +106,37 @@ export class StorageController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async getProvider() {
     return { provider: this.storageService.getProvider() };
+  }
+}
+
+@ApiTags('Media')
+@Controller('media')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@ApiBearerAuth()
+export class MediaController {
+  constructor(private readonly storageService: StorageService) {}
+
+  @Get('proxy/:key(*)')
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN, UserRole.USER)
+  @ApiOperation({ summary: 'Proxy media file from cloud storage' })
+  @ApiResponse({ status: 200, description: 'Media file served successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'File not found' })
+  async proxyMedia(@Param('key') key: string, @Res() res: any) {
+    try {
+      const result = await this.storageService.downloadFile(key);
+      
+      res.set({
+        'Content-Type': result.contentType,
+        'Content-Length': result.size.toString(),
+        'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+      });
+      
+      return res.send(result.buffer);
+    } catch (error) {
+      throw new BadRequestException('Failed to retrieve media file');
+    }
   }
 }

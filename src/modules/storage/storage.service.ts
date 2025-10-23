@@ -6,6 +6,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface StorageUploadResult {
   url: string;
+  proxyUrl: string;
   key: string;
   size: number;
   contentType: string;
@@ -21,6 +22,7 @@ export interface StorageDownloadResult {
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly provider: string;
+  private readonly baseUrl: string;
   private azureClient?: BlobServiceClient;
   private azureContainer?: ContainerClient;
   private awsClient?: S3Client;
@@ -28,6 +30,7 @@ export class StorageService {
 
   constructor(private configService: ConfigService) {
     this.provider = this.configService.get<string>('storage.provider') || 'azure';
+    this.baseUrl = this.configService.get<string>('app.baseUrl') || 'http://localhost:5000';
     if (this.provider === 'azure') {
       this.initializeAzure();
     } else if (this.provider === 'aws') {
@@ -116,10 +119,12 @@ export class StorageService {
       });
 
       const url = blockBlobClient.url;
+      const proxyUrl = `/api/v1/media/proxy/${encodeURIComponent(key)}`;
       this.logger.log(`File uploaded to Azure: ${url}`);
 
       return {
         url,
+        proxyUrl,
         key,
         size: file.length,
         contentType,
@@ -150,10 +155,12 @@ export class StorageService {
       await this.awsClient.send(command);
 
       const url = `https://${this.awsBucket}.s3.amazonaws.com/${key}`;
+      const proxyUrl = `/api/v1/media/proxy/${encodeURIComponent(key)}`;
       this.logger.log(`File uploaded to AWS S3: ${url}`);
 
       return {
         url,
+        proxyUrl,
         key,
         size: file.length,
         contentType,
@@ -334,5 +341,33 @@ export class StorageService {
 
   getProvider(): string {
     return this.provider;
+  }
+
+  /**
+   * Generate a proxy URL for an existing file
+   * @param key The storage key of the file
+   * @returns The proxy URL
+   */
+  getProxyUrl(key: string): string {
+    return `/api/v1/media/proxy/${encodeURIComponent(key)}`;
+  }
+
+  /**
+   * Check if a URL is a proxy URL
+   * @param url The URL to check
+   * @returns True if it's a proxy URL
+   */
+  isProxyUrl(url: string): boolean {
+    return url.includes('/api/v1/media/proxy/');
+  }
+
+  /**
+   * Extract the storage key from a proxy URL
+   * @param proxyUrl The proxy URL
+   * @returns The storage key
+   */
+  extractKeyFromProxyUrl(proxyUrl: string): string {
+    const match = proxyUrl.match(/\/api\/v1\/media\/proxy\/(.+)$/);
+    return match ? decodeURIComponent(match[1]) : '';
   }
 }

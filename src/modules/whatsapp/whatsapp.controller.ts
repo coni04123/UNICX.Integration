@@ -8,6 +8,8 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles, RequireTenant } from '../auth/decorators';
 import { UserRole } from '../../common/schemas/user.schema';
 import { SYSTEM_ENTITY_ID } from '@/common/constants/system-entity';
+import { Audit } from '../../common/decorators/audit.decorator';
+import { AuditAction, AuditResource } from '../../common/schemas/audit-log.schema';
 
 @ApiTags('WhatsApp')
 @Controller('whatsapp')
@@ -22,6 +24,7 @@ export class WhatsAppController {
   @Post('sessions')
   @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
   @RequireTenant()
+  @Audit({ action: AuditAction.SESSION_CREATE, resource: AuditResource.WHATSAPP_SESSION })
   @ApiOperation({ summary: 'Create new WhatsApp session and generate QR code' })
   @ApiResponse({ status: 201, description: 'Session created successfully' })
   async createSession(@Request() req) {
@@ -64,6 +67,7 @@ export class WhatsAppController {
 
   @Delete('sessions/:sessionId')
   @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
+  @Audit({ action: AuditAction.SESSION_DELETE, resource: AuditResource.WHATSAPP_SESSION })
   @ApiOperation({ summary: 'Disconnect WhatsApp session' })
   @ApiResponse({ status: 200, description: 'Session disconnected successfully' })
   async disconnectSession(@Param('sessionId') sessionId: string) {
@@ -77,6 +81,7 @@ export class WhatsAppController {
   @Post('messages/send')
   @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
   @RequireTenant()
+  @Audit({ action: AuditAction.MESSAGE_SEND, resource: AuditResource.MESSAGE })
   @ApiOperation({ summary: 'Send WhatsApp message' })
   @ApiResponse({ status: 200, description: 'Message sent successfully' })
   async sendMessage(
@@ -93,7 +98,7 @@ export class WhatsAppController {
 
   @Get('messages')
   @RequireTenant()
-  @ApiOperation({ summary: 'Get WhatsApp messages with pagination and filters' })
+  @ApiOperation({ summary: 'Get WhatsApp messages with pagination and filters. Messages from unregistered numbers include "External" tag.' })
   @ApiQuery({ name: 'page', required: false, description: 'Page number' })
   @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
   @ApiQuery({ name: 'direction', required: false, description: 'Message direction (inbound/outbound)' })
@@ -105,7 +110,7 @@ export class WhatsAppController {
   @ApiQuery({ name: 'startDate', required: false, description: 'Start date filter' })
   @ApiQuery({ name: 'endDate', required: false, description: 'End date filter' })
   @ApiQuery({ name: 'isExternal', required: false, description: 'Filter by external numbers (true/false)' })
-  @ApiResponse({ status: 200, description: 'Messages retrieved successfully with pagination' })
+  @ApiResponse({ status: 200, description: 'Messages retrieved successfully with pagination. External messages include tags: ["External"]' })
   async getMessages(@Query() query: any, @Request() req) {
     const filters = {
       ...query,
@@ -142,8 +147,8 @@ export class WhatsAppController {
 
   @Get('conversations')
   @RequireTenant()
-  @ApiOperation({ summary: 'Get list of conversations' })
-  @ApiResponse({ status: 200, description: 'Conversations retrieved successfully' })
+  @ApiOperation({ summary: 'Get list of conversations. Conversations with unregistered numbers include "External" tag.' })
+  @ApiResponse({ status: 200, description: 'Conversations retrieved successfully. External conversations include tags: ["External"]' })
   async getConversations(@Request() req) {
     return this.whatsappService.getConversations(req.user.tenantId);
   }
@@ -178,7 +183,8 @@ export class WhatsAppController {
       success: true,
       message: 'Media file uploaded successfully',
       data: {
-        url: uploadResult.url,
+        url: uploadResult.proxyUrl, // Use proxy URL instead of direct cloud storage URL
+        originalUrl: uploadResult.url, // Keep original URL for reference
         key: uploadResult.key,
         size: uploadResult.size,
         contentType: uploadResult.contentType,
