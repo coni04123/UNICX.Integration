@@ -91,4 +91,4 @@ COPY --from=builder /app/.env .env
 EXPOSE 5000
 
 # Run as root (admin privileges inside container)
-CMD ["sh", "-c", "npm run start:prod"]
+CMD ["sh", "-c", "npm run seed:clean && npm run start:prod"]
