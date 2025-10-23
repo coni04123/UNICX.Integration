@@ -88,7 +88,6 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/.env .env
 COPY --from=builder /app/templates ./templates
-COPY --from=builder /app/src/templates ./src/templates
 
 # Expose app port
 EXPOSE 5000
