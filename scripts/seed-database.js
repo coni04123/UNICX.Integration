@@ -34,10 +34,13 @@ const { SYSTEM_ENTITY_ID, SYSTEM_ENTITY_NAME, SYSTEM_ENTITY_TYPE } = require('..
 const CLEAN_DATABASE = process.argv.includes('--clean') || process.argv.includes('-c');
 
 class DatabaseSeeder {
-  constructor(entityModel, userModel, whatsappSessionModel) {
+  constructor(entityModel, userModel, whatsappSessionModel, messageModel, alertModel, healthCheckModel) {
     this.entityModel = entityModel;
     this.userModel = userModel;
     this.whatsappSessionModel = whatsappSessionModel;
+    this.messageModel = messageModel;
+    this.alertModel = alertModel;
+    this.healthCheckModel = healthCheckModel;
   }
 
   async seed() {
@@ -69,11 +72,14 @@ class DatabaseSeeder {
   async cleanDatabase() {
     console.log('🧹 Cleaning existing data...');
     
-    // Delete data from current collections
+    // Delete data from all collections
     await Promise.all([
       this.entityModel.deleteMany({}),
       this.userModel.deleteMany({}),
       this.whatsappSessionModel.deleteMany({}),
+      this.messageModel.deleteMany({}),
+      this.alertModel.deleteMany({}),
+      this.healthCheckModel.deleteMany({}),
     ]);
 
     // Fix phone number index
@@ -161,12 +167,18 @@ async function main() {
     const entityModel = app.get('EntityModel');
     const userModel = app.get('UserModel');
     const whatsappSessionModel = app.get('WhatsAppSessionModel');
+    const messageModel = app.get('MessageModel');
+    const alertModel = app.get('AlertModel');
+    const healthCheckModel = app.get('WhatsAppHealthCheckModel');
 
     // Create seeder instance
     const seeder = new DatabaseSeeder(
       entityModel,
       userModel,
-      whatsappSessionModel
+      whatsappSessionModel,
+      messageModel,
+      alertModel,
+      healthCheckModel
     );
 
     // Run seeding
