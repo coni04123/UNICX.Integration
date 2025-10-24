@@ -46,9 +46,9 @@ class DatabaseSeeder {
   async seed() {
     console.log('🌱 Starting database seeding...');
     
-    if (CLEAN_DATABASE) {
+    // if (CLEAN_DATABASE) {
       await this.cleanDatabase();
-    }
+    // }
 
     const stats = {
       entities: 0,
