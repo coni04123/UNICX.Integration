@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { UsersService } from './users.service';
+import { WhatsAppHealthCheckService } from '../whatsapp/whatsapp-health-check.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InviteUserDto } from './dto/create-user.dto';
@@ -27,7 +28,10 @@ import { UserRole, RegistrationStatus, WhatsAppConnectionStatus } from '../../co
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly healthCheckService: WhatsAppHealthCheckService,
+  ) {}
 
   @Post()
   @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
@@ -168,5 +172,40 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'User not found' })
   async regenerateQRCode(@Param('id') id: string, @Request() req) {
     return this.usersService.regenerateQRCode(id, req.user.tenantId);
+  }
+
+  @Get(':id/health-status')
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN, UserRole.USER)
+  @ApiOperation({ summary: 'Get WhatsApp health check status for user' })
+  @ApiResponse({ status: 200, description: 'Health check status retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async getUserHealthStatus(@Param('id') id: string) {
+    const stats = await this.healthCheckService.getUserHealthStats(id);
+    return {
+      success: true,
+      data: stats,
+    };
+  }
+
+  @Post(':id/trigger-health-check')
+  @Roles(UserRole.SYSTEM_ADMIN, UserRole.TENANT_ADMIN)
+  @ApiOperation({ summary: 'Manually trigger health check for user\'s WhatsApp session' })
+  @ApiResponse({ status: 200, description: 'Health check triggered successfully' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async triggerHealthCheck(@Param('id') id: string, @Request() req) {
+    try {
+      const healthCheck = await this.healthCheckService.triggerManualHealthCheckByUserId(id);
+      
+      return {
+        success: true,
+        data: healthCheck,
+        message: 'Health check completed',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'Failed to trigger health check',
+      };
+    }
   }
 }

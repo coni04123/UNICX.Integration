@@ -9,6 +9,7 @@ import { Entity } from '../../common/schemas/entity.schema';
 import { Message } from '../../common/schemas/message.schema';
 import { WhatsAppSession, SessionStatus } from '../../common/schemas/whatsapp-session.schema';
 import { AuditLog } from '../../common/schemas/audit-log.schema';
+import { SYSTEM_ENTITY_ID, isSystemEntity } from '../../common/constants/system-entity';
 
 @Injectable()
 export class DashboardService {
@@ -25,20 +26,20 @@ export class DashboardService {
     private whatsappService: WhatsAppService,
   ) {}
 
-  async getDashboardStats(tenantId: string) {
+  async getDashboardStats(entityId: string, entityPath: string) {
     try {
       const now = new Date();
       const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
       // Get entity statistics
-      const entityStats = await this.getEntityStats(tenantId);
+      const entityStats = await this.getEntityStats(entityId, entityPath);
       
       // Get message statistics
-      const messageStats = await this.getMessageStats(tenantId, yesterday, now);
+      const messageStats = await this.getMessageStats(entityId, entityPath, yesterday, now);
       
       // Get user statistics
-      const userStats = await this.getUserStats(tenantId);
+      const userStats = await this.getUserStats(entityId, entityPath);
 
       return {
         entities: entityStats,
@@ -51,68 +52,61 @@ export class DashboardService {
     }
   }
 
-  private async getEntityStats(tenantId: string) {
-    // Convert tenantId string to ObjectId
-    const tenantObjectId = new Types.ObjectId(tenantId);
+  private async getEntityStats(entityId: string, entityPath: string) {
+    // Convert entityId string to ObjectId
+    const entityObjectId = new Types.ObjectId(entityId);
+    const isSysAdmin = isSystemEntity(entityId);
     
-    this.logger.log(`Getting entity stats for tenant: ${tenantId} (ObjectId: ${tenantObjectId})`);
+    this.logger.log(`Getting entity stats for entity: ${entityId} (ObjectId: ${entityObjectId}, isSystemAdmin: ${isSysAdmin})`);
     
-    // Query entities where tenantId matches OR _id matches (for root entities)
-    const totalEntities = await this.entityModel.countDocuments({ 
-      $or: [
-        { tenantId: tenantObjectId },
-        { _id: tenantObjectId }
-      ],
-      isActive: true 
-    });
+    // Build query based on whether user is SystemAdmin or not
+    const query: any = { isActive: true };
+    
+    if (!isSysAdmin) {
+      // For non-SystemAdmin, filter by entityIdPath
+      query.entityIdPath = entityObjectId;
+    }
+    // For SystemAdmin, no entityIdPath filter means they see all entities
+    
+    const totalEntities = await this.entityModel.countDocuments(query);
     
     this.logger.log(`Total entities found: ${totalEntities}`);
 
     const companies = await this.entityModel.countDocuments({ 
-      $or: [
-        { tenantId: tenantObjectId },
-        { _id: tenantObjectId }
-      ],
+      ...query,
       type: 'company',
-      isActive: true 
     });
 
     const departments = await this.entityModel.countDocuments({ 
-      $or: [
-        { tenantId: tenantObjectId },
-        { _id: tenantObjectId }
-      ],
+      ...query,
       type: 'department',
-      isActive: true 
     });
+
+    // Build user query based on entityIdPath
+    const userQuery: any = { isActive: true };
+    
+    if (!isSysAdmin) {
+      userQuery.entityIdPath = entityObjectId;
+    }
 
     // Count users with phone numbers (E164 users)
     const e164Users = await this.userModel.countDocuments({ 
-      tenantId: tenantObjectId, 
+      ...userQuery,
       phoneNumber: { $exists: true, $ne: null },
-      isActive: true 
     });
 
     // Calculate registration rate
-    const totalUsers = await this.userModel.countDocuments({ 
-      tenantId: tenantObjectId, 
-      isActive: true 
-    });
+    const totalUsers = await this.userModel.countDocuments(userQuery);
     const registeredUsers = await this.userModel.countDocuments({ 
-      tenantId: tenantObjectId, 
+      ...userQuery,
       registrationStatus: 'registered',
-      isActive: true 
     });
     const registrationRate = totalUsers > 0 ? Math.round((registeredUsers / totalUsers) * 100) : 0;
 
     // Calculate change from last week
     const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const entitiesLastWeek = await this.entityModel.countDocuments({ 
-      $or: [
-        { tenantId: tenantObjectId },
-        { _id: tenantObjectId }
-      ],
-      isActive: true,
+      ...query,
       createdAt: { $lte: lastWeek }
     });
     const change = totalEntities - entitiesLastWeek;
@@ -131,46 +125,50 @@ export class DashboardService {
     };
   }
 
-  private async getMessageStats(tenantId: string, startDate: Date, endDate: Date) {
-    // Convert tenantId string to ObjectId
-    const tenantObjectId = new Types.ObjectId(tenantId);
+  private async getMessageStats(entityId: string, entityPath: string, startDate: Date, endDate: Date) {
+    // Convert entityId string to ObjectId
+    const entityObjectId = new Types.ObjectId(entityId);
+    const isSysAdmin = isSystemEntity(entityId);
     
-    this.logger.log(`Getting message stats for tenant: ${tenantId} (ObjectId: ${tenantObjectId})`);
+    this.logger.log(`Getting message stats for entity: ${entityId} (ObjectId: ${entityObjectId}, isSystemAdmin: ${isSysAdmin})`);
     this.logger.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    
+    // Build base query
+    const baseQuery: any = { isActive: true };
+    
+    if (!isSysAdmin) {
+      baseQuery.entityIdPath = entityObjectId;
+    }
     
     // Messages sent in last 24 hours (outbound messages)
     const sent24h = await this.messageModel.countDocuments({
-      tenantId: tenantObjectId,
+      ...baseQuery,
       direction: 'outbound',
       createdAt: { $gte: startDate, $lte: endDate },
-      isActive: true,
     });
     
     this.logger.log(`Messages sent in 24h: ${sent24h}`);
 
     // Total monitored messages (messages from registered users)
     const monitored = await this.messageModel.countDocuments({
-      tenantId: tenantObjectId,
+      ...baseQuery,
       isExternalNumber: false,
-      isActive: true,
     });
     
     this.logger.log(`Monitored messages: ${monitored}`);
 
     // External messages (from users without phone numbers in our system)
     const external = await this.messageModel.countDocuments({
-      tenantId: tenantObjectId,
+      ...baseQuery,
       isExternalNumber: true,
-      isActive: true,
     });
     
     this.logger.log(`External messages: ${external}`);
 
     // Active conversations (unique phone numbers that sent messages in last 24h)
     const activeConversations = await this.messageModel.distinct('from', {
-      tenantId: tenantObjectId,
+      ...baseQuery,
       createdAt: { $gte: startDate, $lte: endDate },
-      isActive: true,
     });
     
     this.logger.log(`Active conversations: ${activeConversations.length}`);
@@ -179,10 +177,9 @@ export class DashboardService {
     const previousDayStart = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
     const previousDayEnd = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
     const sentPreviousDay = await this.messageModel.countDocuments({
-      tenantId: tenantObjectId,
+      ...baseQuery,
       direction: 'outbound',
       createdAt: { $gte: previousDayStart, $lte: previousDayEnd },
-      isActive: true,
     });
     const change = sent24h - sentPreviousDay;
 
@@ -199,23 +196,27 @@ export class DashboardService {
     };
   }
 
-  private async getUserStats(tenantId: string) {
-    // Convert tenantId string to ObjectId
-    const tenantObjectId = new Types.ObjectId(tenantId);
+  private async getUserStats(entityId: string, entityPath: string) {
+    // Convert entityId string to ObjectId
+    const entityObjectId = new Types.ObjectId(entityId);
+    const isSysAdmin = isSystemEntity(entityId);
     
-    this.logger.log(`Getting user stats for tenant: ${tenantId} (ObjectId: ${tenantObjectId})`);
+    this.logger.log(`Getting user stats for entity: ${entityId} (ObjectId: ${entityObjectId}, isSystemAdmin: ${isSysAdmin})`);
     
-    const totalUsers = await this.userModel.countDocuments({ 
-      tenantId: tenantObjectId, 
-      isActive: true 
-    });
+    // Build base query
+    const baseQuery: any = { isActive: true };
+    
+    if (!isSysAdmin) {
+      baseQuery.entityIdPath = entityObjectId;
+    }
+    
+    const totalUsers = await this.userModel.countDocuments(baseQuery);
     
     this.logger.log(`Total users: ${totalUsers}`);
 
     const monitoredUsers = await this.userModel.countDocuments({ 
-      tenantId: tenantObjectId, 
+      ...baseQuery,
       phoneNumber: { $exists: true, $ne: null },
-      isActive: true 
     });
     
     this.logger.log(`Monitored users: ${monitoredUsers}`);
@@ -223,8 +224,7 @@ export class DashboardService {
     // Calculate change from last week
     const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const usersLastWeek = await this.userModel.countDocuments({ 
-      tenantId: tenantObjectId, 
-      isActive: true,
+      ...baseQuery,
       createdAt: { $lte: lastWeek }
     });
     const change = totalUsers - usersLastWeek;
@@ -240,28 +240,36 @@ export class DashboardService {
     };
   }
 
-  async getSystemHealth(tenantId: string) {
+  async getSystemHealth(entityId: string, entityPath: string) {
     try {
-      // Convert tenantId string to ObjectId
-      const tenantObjectId = new Types.ObjectId(tenantId);
+      // Convert entityId string to ObjectId
+      const entityObjectId = new Types.ObjectId(entityId);
+      const isSysAdmin = isSystemEntity(entityId);
+      
+      // Build base query
+      const baseQuery: any = {};
+      
+      if (!isSysAdmin) {
+        baseQuery.entityIdPath = entityObjectId;
+      }
       
       // Check WhatsApp sessions health
-      const totalSessions = await this.whatsappSessionModel.countDocuments({ tenantId: tenantObjectId });
+      const totalSessions = await this.whatsappSessionModel.countDocuments(baseQuery);
       const activeSessions = await this.whatsappSessionModel.countDocuments({ 
-        tenantId: tenantObjectId, 
+        ...baseQuery,
         status: 'ready' 
       });
 
       // Check recent message activity
       const lastHour = new Date(Date.now() - 60 * 60 * 1000);
       const recentMessages = await this.messageModel.countDocuments({
-        tenantId: tenantObjectId,
+        ...baseQuery,
         createdAt: { $gte: lastHour },
       });
 
       // Check user registration activity
       const recentRegistrations = await this.userModel.countDocuments({
-        tenantId: tenantObjectId,
+        ...baseQuery,
         registrationStatus: 'registered',
         createdAt: { $gte: lastHour },
       });
@@ -288,14 +296,24 @@ export class DashboardService {
     }
   }
 
-  async getRecentActivity(tenantId: string, limit: number = 10) {
+  async getRecentActivity(entityId: string, entityPath: string, limit: number = 10) {
     try {
-      this.logger.log(`Getting recent activity for tenant: ${tenantId}, limit: ${limit}`);
+      this.logger.log(`Getting recent activity for entity: ${entityId}, limit: ${limit}`);
       const activities = [];
+
+      // Build query based on whether user is SystemAdmin
+      const entityObjectId = new Types.ObjectId(entityId);
+      const isSysAdmin = isSystemEntity(entityId);
+      
+      const query: any = { isActive: true };
+      
+      if (!isSysAdmin) {
+        query.entityIdPath = entityObjectId;
+      }
 
       // Get recent audit logs
       const auditLogs = await this.auditLogModel
-        .find({ tenantId: new Types.ObjectId(tenantId), isActive: true })
+        .find(query)
         .sort({ createdAt: -1 })
         .limit(limit)
         .lean();
@@ -325,7 +343,7 @@ export class DashboardService {
 
       // If we don't have enough audit logs, add system events
       if (activities.length < limit) {
-        const systemEvents = await this.getSystemEvents(tenantId, limit - activities.length);
+        const systemEvents = await this.getSystemEvents(entityId, entityPath, limit - activities.length);
         activities.push(...systemEvents);
       }
 
@@ -382,12 +400,22 @@ export class DashboardService {
     return details.length > 0 ? details.join(' - ') : `${log.action} performed on ${log.resource}`;
   }
 
-  private async getSystemEvents(tenantId: string, limit: number) {
+  private async getSystemEvents(entityId: string, entityPath: string, limit: number) {
     const events = [];
+    
+    // Build query based on whether user is SystemAdmin
+    const entityObjectId = new Types.ObjectId(entityId);
+    const isSysAdmin = isSystemEntity(entityId);
+    
+    const query: any = {};
+    
+    if (!isSysAdmin) {
+      query.entityIdPath = entityObjectId;
+    }
     
     // Get recent WhatsApp sessions
     const recentSessions = await this.whatsappSessionModel
-      .find({ tenantId: new Types.ObjectId(tenantId) })
+      .find(query)
       .sort({ createdAt: -1 })
       .limit(Math.min(limit, 3))
       .lean();
@@ -414,7 +442,7 @@ export class DashboardService {
     // Get recent users
     if (events.length < limit) {
       const recentUsers = await this.userModel
-        .find({ tenantId: new Types.ObjectId(tenantId), isActive: true })
+        .find({ ...query, isActive: true })
         .sort({ createdAt: -1 })
         .limit(Math.min(limit - events.length, 2))
         .lean();

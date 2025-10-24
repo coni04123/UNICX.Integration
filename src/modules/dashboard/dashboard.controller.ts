@@ -23,8 +23,9 @@ export class DashboardController {
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
   async getDashboardStats(@Req() req: Request) {
     try {
-      const tenantId = req.user['tenantId'];
-      const stats = await this.dashboardService.getDashboardStats(tenantId);
+      const entityId = req.user['entityId'];
+      const entityPath = req.user['entityPath'];
+      const stats = await this.dashboardService.getDashboardStats(entityId, entityPath);
       
       return {
         success: true,
@@ -43,9 +44,10 @@ export class DashboardController {
   @ApiResponse({ status: 200, description: 'Recent activities retrieved successfully' })
   async getRecentActivity(@Req() req: Request, @Query('limit') limit?: string) {
     try {
-      const tenantId = req.user['tenantId'];
+      const entityId = req.user['entityId'];
+      const entityPath = req.user['entityPath'];
       const activityLimit = limit ? parseInt(limit) : 10;
-      const activities = await this.dashboardService.getRecentActivity(tenantId, activityLimit);
+      const activities = await this.dashboardService.getRecentActivity(entityId, entityPath, activityLimit);
       
       return {
         success: true,
@@ -63,8 +65,9 @@ export class DashboardController {
   @ApiResponse({ status: 200, description: 'System health retrieved successfully' })
   async getSystemHealth(@Req() req: Request) {
     try {
-      const tenantId = req.user['tenantId'];
-      const health = await this.dashboardService.getSystemHealth(tenantId);
+      const entityId = req.user['entityId'];
+      const entityPath = req.user['entityPath'];
+      const health = await this.dashboardService.getSystemHealth(entityId, entityPath);
       
       return {
         success: true,

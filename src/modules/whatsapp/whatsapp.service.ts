@@ -9,6 +9,8 @@ import { Message, MessageDirection, MessageStatus, MessageType } from '../../com
 import { User } from '../../common/schemas/user.schema';
 import { Types } from 'mongoose';
 import * as os from 'os';
+import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import { EntitiesService } from '../entities/entities.service';
 import { StorageService } from '../storage/storage.service';
 
@@ -44,15 +46,33 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
 
   async createSession(sessionId: string, userId: Types.ObjectId, invitedBy: string, entityId: string, tenantId: string): Promise<WhatsAppSession> {
     this.logger.log(`Creating new WhatsApp session: ${sessionId}`);
-
     // Get entity path before creating session
     const entityObjectId = new Types.ObjectId(entityId);
-    const entity = await this.entityService.findOne(entityId, null);
+    this.logger.log(`Creating WhatsApp session for entity: ${entityId}`);
 
-    console.log(entity);
+    let entityIdPath: Types.ObjectId[] = [];
     
-    if (!entity.entityIdPath || entity.entityIdPath.length) {
-      this.logger.warn(`Failed to get entity path for entity: ${entityId}`);
+    // Check if this is a System Admin (special entity ID)
+    const isSystemAdmin = entityId === "000000000000000000000001";
+    
+    if (isSystemAdmin) {
+      this.logger.log("Creating session for System Administrator");
+      entityIdPath = [entityObjectId]; // System Admin's own entity ID only
+    } else {
+      // For regular users, get the full entity path
+      const entity = await this.entityService.findOne(entityId, null);
+      this.logger.log(`Entity found: ${JSON.stringify(entity)}`);
+      
+      if (!entity) {
+        throw new Error(`Entity not found: ${entityId}`);
+      }
+      
+      if (!entity.entityIdPath || !entity.entityIdPath.length) {
+        this.logger.warn(`No entity path found for entity: ${entityId}, using entity ID only`);
+        entityIdPath = [entityObjectId];
+      } else {
+        entityIdPath = entity.entityIdPath;
+      }
     }
 
     // Check if session already exists
@@ -64,8 +84,8 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
         sessionId,
         userId,
         entityId: entityObjectId,
-        entityIdPath: entity.entityIdPath,
-        tenantId: new Types.ObjectId(tenantId),
+        entityIdPath: entityIdPath,
+        tenantId: isSystemAdmin ? entityObjectId : new Types.ObjectId(tenantId),
         status: SessionStatus.CONNECTING,
         createdBy: invitedBy,
       });
@@ -74,7 +94,8 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       session = await this.sessionModel.findOneAndUpdate(
         { sessionId },
         { 
-          entityIdPath: entity.entityIdPath,
+          entityIdPath: entityIdPath,
+          tenantId: isSystemAdmin ? entityObjectId : new Types.ObjectId(tenantId),
           lastActivityAt: new Date()
         },
         { new: true }
@@ -88,79 +109,190 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async initializeClient(sessionId: string): Promise<void> {
-    if (this.clients.has(sessionId)) {
-      this.logger.warn(`Client already exists for session: ${sessionId}`);
-      return;
-    }
-
-    let chromePath;
-
-    console.log(os.platform());
-
-    if (os.platform() === "win32") {
-      // Windows
-      chromePath = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-    } else if (os.platform() === "linux") {
-      // Linux
-      // Check common paths
-      chromePath = "/usr/bin/chromium-browser"; // or "/usr/bin/chromium-browser"
-    } else if (os.platform() === "darwin") {
-      // macOS
-      chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-    }
-
-    const client = new Client({
-      authStrategy: new LocalAuth({ clientId: sessionId }),
-      puppeteer: {
-        executablePath: chromePath, // path to Chrome
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      },
-    });
-
-    // QR Code event
-    client.on('qr', async (qr) => {
-      this.logger.log(`QR Code received for session: ${sessionId}`);
-      await this.handleQRCode(sessionId, qr);
-    });
-
-    // Ready event
-    client.on('ready', async () => {
-      this.logger.log(`WhatsApp client ready for session: ${sessionId}`);
-      await this.handleReady(sessionId, client);
-    });
-
-    // Authenticated event
-    client.on('authenticated', async () => {
-      this.logger.log(`WhatsApp client authenticated for session: ${sessionId}`);
-      await this.updateSessionStatus(sessionId, SessionStatus.AUTHENTICATED);
-    });
-
-    // Disconnected event
-    client.on('disconnected', async (reason) => {
-      this.logger.warn(`WhatsApp client disconnected for session: ${sessionId}. Reason: ${reason}`);
-      await this.handleDisconnected(sessionId, reason);
-    });
-
-    // Message event (incoming messages)
-    client.on('message', async (message) => {
-      await this.handleIncomingMessage(sessionId, message);
-    });
-
-    // Message create event (outgoing messages)
-    client.on('message_create', async (message) => {
-      if (message.fromMe) {
-        await this.handleOutgoingMessage(sessionId, message);
+    try {
+      if (this.clients.has(sessionId)) {
+        this.logger.warn(`Client already exists for session: ${sessionId}`);
+        return;
       }
-    });
 
-    // Message acknowledgment
-    client.on('message_ack', async (message, ack) => {
-      await this.handleMessageAck(sessionId, message, ack);
-    });
+      // Step 1: Detect Chrome path
+      const platform = os.platform();
+      this.logger.log(`Detecting Chrome path for platform: ${platform}`);
 
-    this.clients.set(sessionId, client);
-    await client.initialize();
+      const windowsPaths = [
+        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+        process.env.CHROME_PATH, // Allow override via env var
+      ];
+
+      const linuxPaths = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+        process.env.CHROME_PATH,
+      ];
+
+      const macPaths = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        process.env.CHROME_PATH,
+      ];
+
+      const paths = platform === "win32" ? windowsPaths
+                  : platform === "linux" ? linuxPaths
+                  : platform === "darwin" ? macPaths
+                  : [];
+
+      // Find first existing Chrome path
+      let chromePath;
+      for (const path of paths) {
+        try {
+          if (path && fsSync.existsSync(path)) {
+            chromePath = path;
+            this.logger.log(`Found Chrome at: ${path}`);
+            break;
+          }
+        } catch (error) {
+          this.logger.warn(`Error checking Chrome path ${path}: ${error.message}`);
+        }
+      }
+
+      if (!chromePath) {
+        throw new Error("Chrome not found. Please install Chrome or set CHROME_PATH environment variable.");
+      }
+
+      // Step 2: Clean up any existing session files
+      try {
+        const sessionPath = `${process.cwd()}/.wwebjs_auth/session-${sessionId}`;
+        if (fsSync.existsSync(sessionPath)) {
+          this.logger.log(`Cleaning up existing session files at: ${sessionPath}`);
+          await fs.rm(sessionPath, { recursive: true, force: true });
+          // Wait a bit to ensure files are released
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to clean up existing session files: ${error.message}`);
+        // Continue anyway - the files might be locked but WhatsApp-web.js can handle it
+      }
+
+      // Step 3: Initialize WhatsApp client
+      this.logger.log(`Initializing WhatsApp client for session: ${sessionId}`);
+      const client = new Client({
+        authStrategy: new LocalAuth({ 
+          clientId: sessionId,
+          dataPath: `${process.cwd()}/.wwebjs_auth` 
+        }),
+        puppeteer: {
+          executablePath: chromePath,
+          headless: true,
+          args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-accelerated-2d-canvas",
+            "--no-first-run",
+            "--no-zygote",
+            "--disable-gpu"
+          ],
+        },
+      });
+
+      // Step 4: Set up event handlers with error handling
+      client.on('qr', async (qr) => {
+        try {
+          this.logger.log(`QR Code received for session: ${sessionId} (length: ${qr.length})`);
+          this.logger.debug(`QR Data: ${qr.substring(0, 20)}...`);
+          await this.handleQRCode(sessionId, qr);
+        } catch (error) {
+          this.logger.error(`Error handling QR code for session ${sessionId}:`, error);
+          await this.updateSessionStatus(sessionId, SessionStatus.FAILED);
+        }
+      });
+
+      client.on('ready', async () => {
+        try {
+          this.logger.log(`WhatsApp client ready for session: ${sessionId}`);
+          await this.handleReady(sessionId, client);
+        } catch (error) {
+          this.logger.error(`Error handling ready event for session ${sessionId}:`, error);
+          await this.updateSessionStatus(sessionId, SessionStatus.FAILED);
+        }
+      });
+
+      client.on('authenticated', async () => {
+        try {
+          this.logger.log(`WhatsApp client authenticated for session: ${sessionId}`);
+          await this.updateSessionStatus(sessionId, SessionStatus.AUTHENTICATED);
+        } catch (error) {
+          this.logger.error(`Error handling authentication for session ${sessionId}:`, error);
+          await this.updateSessionStatus(sessionId, SessionStatus.FAILED);
+        }
+      });
+
+      client.on('disconnected', async (reason) => {
+        try {
+          this.logger.warn(`WhatsApp client disconnected for session: ${sessionId}. Reason: ${reason}`);
+          await this.handleDisconnected(sessionId, reason);
+        } catch (error) {
+          this.logger.error(`Error handling disconnect for session ${sessionId}:`, error);
+          await this.updateSessionStatus(sessionId, SessionStatus.FAILED);
+        }
+      });
+
+      client.on('auth_failure', async (msg) => {
+        try {
+          this.logger.error(`Authentication failed for session ${sessionId}: ${msg}`);
+          await this.updateSessionStatus(sessionId, SessionStatus.FAILED);
+          await this.handleDisconnected(sessionId, `Authentication failed: ${msg}`);
+        } catch (error) {
+          this.logger.error(`Error handling auth failure for session ${sessionId}:`, error);
+        }
+      });
+
+      client.on('message', async (message) => {
+        try {
+          await this.handleIncomingMessage(sessionId, message);
+        } catch (error) {
+          this.logger.error(`Error handling incoming message for session ${sessionId}:`, error);
+        }
+      });
+
+      client.on('message_create', async (message) => {
+        try {
+          if (message.fromMe) {
+            await this.handleOutgoingMessage(sessionId, message);
+          }
+        } catch (error) {
+          this.logger.error(`Error handling outgoing message for session ${sessionId}:`, error);
+        }
+      });
+
+      client.on('message_ack', async (message, ack) => {
+        try {
+          await this.handleMessageAck(sessionId, message, ack);
+        } catch (error) {
+          this.logger.error(`Error handling message ack for session ${sessionId}:`, error);
+        }
+      });
+
+      // Step 5: Initialize the client
+      this.logger.log(`Starting WhatsApp client initialization for session: ${sessionId}`);
+      this.clients.set(sessionId, client);
+      
+      try {
+        await client.initialize();
+        this.logger.log(`WhatsApp client initialization completed for session: ${sessionId}`);
+      } catch (error) {
+        this.logger.error(`Failed to initialize WhatsApp client for session ${sessionId}:`, error);
+        this.clients.delete(sessionId);
+        await this.updateSessionStatus(sessionId, SessionStatus.FAILED);
+        throw error;
+      }
+    } catch (error) {
+      this.logger.error(`Critical error during client initialization for session ${sessionId}:`, error);
+      await this.updateSessionStatus(sessionId, SessionStatus.FAILED);
+      throw error;
+    }
   }
 
   private async handleQRCode(sessionId: string, qrData: string): Promise<void> {
@@ -643,10 +775,11 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
       return null;
     }
 
-    return {
-      qrCode: `data:image/png;base64,${session.qrCode}`,
-      expiresAt: session.qrCodeExpiresAt,
-    };
+      // Return the raw base64 string - frontend will add data:image/png;base64, prefix
+      return {
+        qrCode: session.qrCode,
+        expiresAt: session.qrCodeExpiresAt,
+      };
   }
 
   async getSessionStatus(sessionId: string): Promise<WhatsAppSession | null> {
@@ -654,19 +787,59 @@ export class WhatsAppService implements OnModuleInit, OnModuleDestroy {
   }
 
   async disconnectSession(sessionId: string): Promise<void> {
-    const client = this.clients.get(sessionId);
-    if (client) {
-      await client.destroy();
-      this.clients.delete(sessionId);
-    }
+    try {
+      const client = this.clients.get(sessionId);
+      if (client) {
+        // First try to close the session gracefully
+        try {
+          await client.logout();
+        } catch (error) {
+          this.logger.warn(`Failed to logout client for session ${sessionId}: ${error.message}`);
+        }
 
-    await this.sessionModel.findOneAndUpdate(
-      { sessionId },
-      {
-        status: SessionStatus.DISCONNECTED,
-        disconnectedAt: new Date(),
-      },
-    );
+        // Wait a bit to allow resources to be released
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Then destroy the client
+        try {
+          await client.destroy();
+        } catch (error) {
+          this.logger.warn(`Failed to destroy client for session ${sessionId}: ${error.message}`);
+        }
+
+        // Remove from clients map
+        this.clients.delete(sessionId);
+
+        // Wait again before trying to clean up files
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Try to clean up session files
+        try {
+          const sessionPath = `${process.cwd()}/.wwebjs_auth/session-${sessionId}`;
+          if (fsSync.existsSync(sessionPath)) {
+            await fs.rm(sessionPath, { recursive: true, force: true });
+          }
+        } catch (error) {
+          this.logger.warn(`Failed to clean up session files for ${sessionId}: ${error.message}`);
+        }
+      }
+
+      // Update session status in database
+      await this.sessionModel.findOneAndUpdate(
+        { sessionId },
+        { 
+          status: SessionStatus.DISCONNECTED,
+          disconnectedAt: new Date(),
+          qrCode: null,
+          qrCodeGeneratedAt: null,
+          qrCodeExpiresAt: null
+        }
+      );
+    } catch (error) {
+      this.logger.error(`Error during session disconnect for ${sessionId}:`, error);
+      throw error;
+    }
+    // Session status is already updated in the try block
 
     this.logger.log(`Session disconnected: ${sessionId}`);
   }

@@ -187,7 +187,7 @@ export class UsersService {
     const user = await this.userModel.findOne({
       _id: new Types.ObjectId(id),
       isActive: true,
-    }).populate('entityId', 'name path type');
+    }).populate('entity', 'name path type');
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -646,7 +646,9 @@ export class UsersService {
         tenantId
       );
 
-      // Try to get QR code with exponential backoff
+      console.log('Created Session')
+
+      // Try to get QR code with exponential backoff (3 attempts)
       let qrCodeData = null;
       const maxAttempts = 3;
       const baseDelay = 5000; // 5 seconds
@@ -667,7 +669,13 @@ export class UsersService {
         } catch (error) {
           this.logger.warn(`Failed to get QR code on attempt ${attempt}: ${error.message}`);
           if (attempt === maxAttempts) {
-            throw error;
+            // Update status to failed if QR generation failed on last attempt
+            await this.updateWhatsAppConnectionStatus(
+              userId,
+              WhatsAppConnectionStatus.FAILED,
+              tenantId
+            );
+            throw error; // Rethrow on last attempt
           }
         }
       }
@@ -681,6 +689,19 @@ export class UsersService {
         );
         throw new Error('Failed to generate QR code after multiple attempts');
       }
+
+      // Update status to QR_REQUIRED since we successfully got a QR code
+      await this.updateWhatsAppConnectionStatus(
+        userId,
+        WhatsAppConnectionStatus.CONNECTING,
+        tenantId
+      );
+
+      console.log({
+        qrCode: qrCodeData.qrCode,
+        expiresAt: qrCodeData.expiresAt,
+        sessionId
+      });
 
       return {
         qrCode: qrCodeData.qrCode,

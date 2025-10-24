@@ -96,6 +96,9 @@ export class User {
   @Prop({ required: true, enum: UserRole, default: UserRole.USER })
   role: UserRole;
 
+  @Prop({ type: Object, required: false })
+  entity: Object;
+
   @Prop({ type: Types.ObjectId, ref: 'Entity', required: true })
   entityId: Types.ObjectId;
 
